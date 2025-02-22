@@ -14,7 +14,6 @@ Table course {
   subject varchar [not null] 
   duration int [not null]
   teacher_id int
-  created_by int
 }
 
 Table lesson {
@@ -116,7 +115,7 @@ Ref: quiz.lesson_id > lesson.id // quiz belongs to lesson
 Ref: quiz.student_id > user.id
 
 Ref: certificate.student_id > user.id
-Ref: certificate.course_id > course.id
+Ref: certificate.course_id - course.id
 
 Ref: discussion.lesson_id > lesson.id
 Ref: discussion.user_id > user.id
