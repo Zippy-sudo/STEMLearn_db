@@ -12,7 +12,7 @@ class Course(db.Model, SerializerMixin):
     subject = db.Column(db.String, nullable=False)
     duration = db.Column(db.Integer, nullable=False)  
     teacher_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    created_at = db.Column(db.String, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.String, nullable=False)
 
     # Relationships
     teacher = db.relationship('User', foreign_keys=[teacher_id], back_populates='courses_taught')
