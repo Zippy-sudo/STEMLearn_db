@@ -1,0 +1,126 @@
+Table user {
+  id int [pk, increment]
+  name varchar [not null]
+  email varchar [unique, not null]
+  password_hash varchar [not null]
+  role varchar [not null]
+  created_at datetime
+}
+
+Table course {
+  id int [pk, increment]
+  title varchar [not null]
+  description text [not null]
+  subject varchar [not null] 
+  duration int [not null]
+  teacher_id int
+  created_by int
+}
+
+Table lesson {
+  id int [pk, increment]
+  title varchar [not null]
+  content text [not null]
+  video_url varchar
+  resources varchar
+  course_id int
+  created_at datetime
+}
+
+Table resource {
+  id int [pk, increment]
+  lesson_id int
+  title varchar
+  file_url varchar
+}
+
+Table enrollment {
+  id int [pk, increment]
+  student_id int
+  course_id int
+  enrolled_at datetime
+  completion_percentage float
+}
+
+Table progress {
+  id int [pk, increment]
+  student_id int
+  course_id int
+  lesson_id int
+  video_watched boolean
+  resource_viewed boolean
+  quiz_completed boolean
+  completed boolean
+  completed_at datetime
+}
+
+Table quiz {
+  id int [pk, increment]
+  lesson_id int
+  student_id int
+  question text [not null]
+  options text [not null] 
+  correct_answer varchar [not null]
+  attempts int
+}
+
+Table assignment_submission {
+  id int [pk, increment]
+  student_id int
+  lesson_id int
+  submission_text text
+  file_url varchar
+  submitted_at datetime
+  teacher_feedback text
+  grade float
+}
+
+Table certificate {
+  id int [pk, increment]
+  student_id int
+  course_id int
+  issued_at datetime
+}
+
+Table discussion {
+  id int [pk, increment]
+  lesson_id int
+  user_id int
+  message text [not null]
+  created_at datetime
+}
+
+Table activity_log {
+  id int [pk, increment]
+  user_id int
+  action varchar
+  timestamp datetime
+}
+
+
+Ref: resource.lesson_id > lesson.id
+Ref: course.teacher_id > user.id
+Ref: course.created_by > user.id
+Ref: lesson.course_id > course.id // lesson belongs to course
+// enrollment
+Ref: enrollment.student_id > user.id
+Ref: enrollment.course_id > course.id
+
+// Progress links a student to a lesson in a course
+Ref: progress.student_id > user.id
+Ref: progress.course_id > course.id
+Ref: progress.lesson_id > lesson.id
+Ref: quiz.lesson_id > lesson.id // quiz belongs to lesson
+
+// A student's quiz attempt links a user to a quiz
+Ref: quiz.student_id > user.id
+
+Ref: certificate.student_id > user.id
+Ref: certificate.course_id > course.id
+
+Ref: discussion.lesson_id > lesson.id
+Ref: discussion.user_id > user.id
+
+Ref: assignment_submission.student_id > user.id
+Ref: assignment_submission.lesson_id > lesson.id
+Ref: activity_log.user_id > user.id
