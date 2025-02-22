@@ -14,7 +14,7 @@ def main():
 class Users(Resource):
 
     def get(self):
-        users = Users.query.all()
+        users = User.query.all()
 
         if len(users) > 0:
             users_dict = [user.to_dict() for user in users]
@@ -34,7 +34,5 @@ class Users(Resource):
     
 api.add_resource(Users, "/users")
     
-
-
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
