@@ -1,23 +1,25 @@
 from sqlalchemy_serializer import SerializerMixin
+from sqlalchemy.ext.hybrid import hybrid_property
 
-from config import db, metadata
+from config import db, metadata, flask_bcrypt
 
 #Enrollment Association Table
 enrollments = db.Table(
     "enrollments",
     metadata,
-    db.Column("student_id", db.Integer, db.ForeignKey("users.id"), primary_key=True),
-    db.Column("course_id", db.Integer, db.ForeignKey("courses.id"), primary_key=True)
+    db.Column("student_id", db.Integer, db.ForeignKey("users._id"), primary_key=True),
+    db.Column("course_id", db.Integer, db.ForeignKey("courses._id"), primary_key=True)
 )
 
 #User Table
 class User(db.Model, SerializerMixin):
     __tablename__ = "users"
 
-    id = db.Column(db.Integer, primary_key=True)
+    _id = db.Column(db.Integer, primary_key = True)
     name = db.Column(db.String, nullable = False)
+    public_id = db.Column(db.String, nullable = False)
     email = db.Column(db.String, nullable = False)
-    password_hash = db.Column(db.String, nullable = False)
+    _password_hash = db.Column(db.String, nullable = False)
     role = db.Column(db.String, nullable = False)
     created_at = db.Column(db.String, nullable = False)
 
@@ -25,20 +27,35 @@ class User(db.Model, SerializerMixin):
     courses = db.relationship("Course", secondary = enrollments, back_populates="students")
 
     # Serialization rules
-    serialize_rules = ('-courses.students',)
+    serialize_rules = ('-courses.students', '-_password_hash')
 
     def __repr__(self):
-        return f'<User {self.id}, Name: {self.name}, Role: {self.role}>'
+        return f'<User {self._id}, Name: {self.name}, Role: {self.role}>'
 
+    @hybrid_property
+    def password_hash(self):
+        return self._password_hash
+
+    @password_hash.setter
+    def password_hash(self, password):
+        password_hash = flask_bcrypt.generate_password_hash(
+            password.encode("utf-8")
+        )
+        self._password_hash = password_hash.decode("utf-8")
+
+    def authenticate_user(self, password):
+        return flask_bcrypt.check_password_hash(self._password_hash, password.encode("utf-8"))
+
+#Course Table
 class Course(db.Model, SerializerMixin):
     __tablename__ = 'courses'
 
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    _id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     title = db.Column(db.String, nullable=False)
     description = db.Column(db.Text, nullable=False)
     subject = db.Column(db.String, nullable=False)
     duration = db.Column(db.Integer, nullable=False)  
-    teacher_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('users._id'), nullable=True)
     created_at = db.Column(db.String, nullable=False)
 
     # Relationships
