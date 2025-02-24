@@ -1,7 +1,7 @@
 from app import app
 from uuid import uuid4
 from datetime import datetime
-from models import db, User, Course, enrollments
+from models import db, User, Course, enrollments, Certificate
 
 with app.app_context():
 
@@ -9,6 +9,7 @@ with app.app_context():
     db.session.commit()
     User.query.delete()
     Course.query.delete()
+    Certificate.query.delete() 
 
     print("Generating Users...")
 
@@ -92,4 +93,18 @@ with app.app_context():
     Course3.students.append(User3)
 
     db.session.commit()
+    
+    print("Generating Certificates...")
+
+    certificates = [
+        Certificate(student_id=User3._id, course_id=Course1._id, issued_at=datetime.now().strftime("%Y-%m-%d")),
+        Certificate(student_id=User4._id, course_id=Course2._id, issued_at=datetime.now().strftime("%Y-%m-%d")),
+        Certificate(student_id=User5._id, course_id=Course3._id, issued_at=datetime.now().strftime("%Y-%m-%d")),
+        Certificate(student_id=User3._id, course_id=Course3._id, issued_at=datetime.now().strftime("%Y-%m-%d"))
+    ]
+
+    db.session.add_all(certificates)
+    db.session.commit()
+
+
     print("All Good.")
