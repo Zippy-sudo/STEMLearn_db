@@ -343,6 +343,128 @@ class CourseById(Resource):
         return make_response({"Success": "Course deleted successfully"}, 200)
         
 api.add_resource(CourseById, "/courses/<int:id>", endpoint="course_by_id")
+
+# Certificates
+class Certificates(Resource):
+    # Get all Certificates => ADMIN, TEACHER
+    def get(self):
+        if "Authorization" not in request.headers:
+            return make_response({"Error": "Sign in to continue"}, 401)
+        
+        auth_status = authorize(request.headers.get("Authorization"), ["ADMIN", "TEACHER"])
+        
+        if isinstance(auth_status, int):
+            return make_response({"Error": "Unauthorized access"}, 401 if auth_status == 1 else 403)
+        
+        certificates = Certificate.query.all()
+        if not certificates:
+            return make_response({"Error": "No certificates in Database"}, 404)
+        
+        if auth_status.get("role") == "TEACHER":
+            teacher_courses = Course.query.filter_by(teacher_id=auth_status.get("public_id")).all()
+            course_ids = {course.id for course in teacher_courses}
+            certificates_dict = [cert.to_dict() for cert in certificates if cert.course_id in course_ids]
+            return make_response(certificates_dict, 200)
+        
+        return make_response([cert.to_dict() for cert in certificates], 200)
+
+    # Create a Certificate => ADMIN
+    def post(self):
+        if "Authorization" not in request.headers:
+            return make_response({"Error": "Sign in to continue"}, 401)
+        
+        auth_status = authorize(request.headers.get("Authorization"), ["ADMIN"])
+        if isinstance(auth_status, int):
+            return make_response({"Error": "Unauthorized access"}, 401 if auth_status == 1 else 403)
+        
+        data = request.get_json()
+        if not data or "student_id" not in data or "course_id" not in data:
+            return make_response({"Error": "Invalid input"}, 400)
+        
+        try:
+            new_cert = Certificate(student_id=data["student_id"], course_id=data["course_id"])
+            db.session.add(new_cert)
+            db.session.commit()
+            return make_response(new_cert.to_dict(), 201)
+        except Exception as e:
+            db.session.rollback()
+            return make_response({"Error": "Database operation failed"}, 500)
+
+
+class CertificateById(Resource):
+    # Get a single Certificate by ID => ADMIN, TEACHER, STUDENT
+    def get(self, id):
+        if "Authorization" not in request.headers:
+            return make_response({"Error": "Sign in to continue"}, 401)
+        
+        auth_status = authorize(request.headers.get("Authorization"), ["ADMIN", "TEACHER", "STUDENT"])
+        if isinstance(auth_status, int):
+            return make_response({"Error": "Unauthorized access"}, 401 if auth_status == 1 else 403)
+        
+        certificate = Certificate.query.get(id)
+        if not certificate:
+            return make_response({"Error": "Certificate not found"}, 404)
+        
+        if auth_status.get("role") == "STUDENT" and certificate.student_id != auth_status.get("public_id"):
+            return make_response({"Error": "You are not authorized to access this certificate"}, 403)
+        elif auth_status.get("role") == "TEACHER":
+            if not Course.query.filter_by(id=certificate.course_id, teacher_id=auth_status.get("public_id")).first():
+                return make_response({"Error": "You are not authorized to access this certificate"}, 403)
+        
+        return make_response(certificate.to_dict(), 200)
+
+    # Update a Certificate => ADMIN
+    def patch(self, id):
+        if "Authorization" not in request.headers:
+            return make_response({"Error": "Sign in to continue"}, 401)
+        
+        auth_status = authorize(request.headers.get("Authorization"), ["ADMIN"])
+        if isinstance(auth_status, int):
+            return make_response({"Error": "Unauthorized access"}, 401 if auth_status == 1 else 403)
+        
+        certificate = Certificate.query.get(id)
+        if not certificate:
+            return make_response({"Error": "Certificate not found"}, 404)
+        
+        data = request.get_json()
+        if not data:
+            return make_response({"Error": "Invalid input"}, 400)
+        
+        try:
+            for key, value in data.items():
+                if hasattr(certificate, key):
+                    setattr(certificate, key, value)
+            db.session.commit()
+            return make_response(certificate.to_dict(), 200)
+        except Exception:
+            db.session.rollback()
+            return make_response({"Error": "Database operation failed"}, 500)
+
+    # Delete a Certificate => ADMIN
+    def delete(self, id):
+        if "Authorization" not in request.headers:
+            return make_response({"Error": "Sign in to continue"}, 401)
+        
+        auth_status = authorize(request.headers.get("Authorization"), ["ADMIN"])
+        if isinstance(auth_status, int):
+            return make_response({"Error": "Unauthorized access"}, 401 if auth_status == 1 else 403)
+        
+        certificate = Certificate.query.get(id)
+        if not certificate:
+            return make_response({"Error": "Certificate not found"}, 404)
+        
+        try:
+            db.session.delete(certificate)
+            db.session.commit()
+            return make_response({"Success": "Certificate deleted successfully"}, 200)
+        except Exception:
+            db.session.rollback()
+            return make_response({"Error": "Database operation failed"}, 500)
+
+
+api.add_resource(Certificates, "/certificates")
+api.add_resource(CertificateById, "/certificates/<int:id>")
+
     
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
