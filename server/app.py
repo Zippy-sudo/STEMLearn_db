@@ -256,6 +256,113 @@ class CourseById(Resource):
         return make_response({"Success": "Course deleted successfully"}, 200)
         
 api.add_resource(CourseById, "/courses/<int:id>", endpoint="course_by_id")
+
+class Certificates(Resource):
+
+    # Get all Certificates
+    def get(self):
+
+        if "Authorization" in request.headers:
+            authorize(request.headers.get("Authorization"), [])
+        else:
+            return make_response({"Error": "Sign in to continue"}, 401)
+
+        certificates = Certificate.query.all()
+
+        if len(certificates) > 0:
+            certificates_dict = [certificate.to_dict() for certificate in certificates]
+            return make_response(certificates_dict, 200)
+        else:
+            return make_response({"Error": "No certificates in Database"}, 404)
+
+    # Create a new Certificate
+    def post(self):
+
+        if "Authorization" in request.headers:
+            authorize(request.headers.get("Authorization"), ["STUDENT"])
+        else:
+            return make_response({"Error": "Sign in to continue"}, 401)
+
+        new_certificate_data = request.get_json()
+
+        if not new_certificate_data:
+            return make_response({"Error": "Invalid data"}, 400)
+        else:
+            try:
+                new_certificate = Certificate(
+                    title=new_certificate_data.get("title"),
+                    issued_to=new_certificate_data.get("issued_to"),
+                    issued_by=new_certificate_data.get("issued_by"),
+                    issue_date=(datetime.now()).strftime("%d/%m/%Y, %H:%M:%S"),
+                    course_id=new_certificate_data.get("course_id"),
+                )
+                db.session.add(new_certificate)
+                db.session.commit()
+                return make_response(new_certificate.to_dict(), 201)
+            except Exception as e:
+                db.session.rollback()
+                return make_response({"Error": f"{e}"}, 500)
+
+
+api.add_resource(Certificates, "/certificates", endpoint="certificates")
+
+
+class CertificateById(Resource):
+
+    # Get a single Certificate by ID
+    def get(self, id):
+
+        if "Authorization" in request.headers:
+            authorize(request.headers.get("Authorization"), [])
+        else:
+            return make_response({"Error": "Sign in to continue"}, 401)
+
+        certificate = Certificate.query.filter_by(_id=id).first_or_404(
+            description=f"No Certificate with Id: {id}"
+        )
+        return make_response(certificate.to_dict(), 200)
+
+    # Update a Certificate
+    def patch(self, id):
+
+        if "Authorization" in request.headers:
+            authorize(request.headers.get("Authorization"), ["STUDENT"])
+        else:
+            return make_response({"Error": "Sign in to continue"}, 401)
+
+        certificate = Certificate.query.filter_by(_id=id).first_or_404(
+            description=f"No Certificate with Id: {id}"
+        )
+        new_certificate_data = request.get_json()
+
+        try:
+            for key, value in new_certificate_data.items():
+                if hasattr(certificate, key):
+                    setattr(certificate, key, value)
+                    db.session.commit()
+            return make_response(certificate.to_dict(), 200)
+        except Exception as e:
+            db.session.rollback()
+            return make_response({"Error": f"{e}"}, 500)
+
+    # Delete a Certificate
+    def delete(self, id):
+
+        if "Authorization" in request.headers:
+            authorize(request.headers.get("Authorization"), ["TEACHER"])
+        else:
+            return make_response({"Error": "Sign in to continue"}, 401)
+
+        certificate = Certificate.query.filter_by(_id=id).first_or_404(
+            description=f"No Certificate with Id: {id}"
+        )
+        db.session.delete(certificate)
+        db.session.commit()
+        return make_response({"Success": "Certificate deleted successfully"}, 200)
+
+
+api.add_resource(CertificateById, "/certificates/<int:id>", endpoint="certificate_by_id")
+
     
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
