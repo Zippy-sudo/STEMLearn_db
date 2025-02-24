@@ -3,7 +3,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 
 from config import db, metadata, flask_bcrypt
 
-#Enrollment Association Table
+# Enrollment Association Table
 enrollments = db.Table(
     "enrollments",
     metadata,
@@ -11,7 +11,7 @@ enrollments = db.Table(
     db.Column("course_id", db.Integer, db.ForeignKey("courses._id"), primary_key=True)
 )
 
-#User Table
+# User Table
 class User(db.Model, SerializerMixin):
     __tablename__ = "users"
 
@@ -23,12 +23,12 @@ class User(db.Model, SerializerMixin):
     role = db.Column(db.String, nullable = False)
     created_at = db.Column(db.String, nullable = False)
 
-    #Relationships
+    # Relationships
     courses = db.relationship("Course", secondary = enrollments, back_populates="students")
     certificates = db.relationship("Certificate", back_populates="student", cascade="all, delete-orphan")
 
     # Serialization rules
-    serialize_rules = ('-courses.students', '-certificates.student', ' -_password_hash')
+    serialize_rules = ('-courses.students', '-courses.certificates','-certificates.student', '-certificates.course', '-_password_hash')
 
     def __repr__(self):
         return f'<User {self._id}, Name: {self.name}, Role: {self.role}>'
@@ -51,7 +51,7 @@ class User(db.Model, SerializerMixin):
 class Course(db.Model, SerializerMixin):
     __tablename__ = 'courses'
 
-    _id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    _id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String, nullable=False)
     description = db.Column(db.Text, nullable=False)
     subject = db.Column(db.String, nullable=False)
@@ -61,13 +61,10 @@ class Course(db.Model, SerializerMixin):
 
     # Relationships
     students = db.relationship('User', secondary = enrollments, back_populates='courses')
-    # lessons = db.relationship('Lesson', back_populates='course', cascade='all, delete-orphan')
-    # progress = db.relationship('Progress', back_populates='course', cascade='all, delete-orphan')
     certificates = db.relationship('Certificate', back_populates='course', cascade='all, delete-orphan')
 
     # Serialization rules
     serialize_rules = ('-students.courses', '-certificates.course')
-    # serialize_rules = ('-teacher.courses_taught', '-lessons.course', '-enrollments.course', '-progress.course', '-certificates.course')
 
     def __repr__(self):
         return f"<Course {self.title}>"
@@ -76,17 +73,17 @@ class Course(db.Model, SerializerMixin):
 class Certificate(db.Model, SerializerMixin):
     __tablename__ = "certificates"
 
-    _id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    student_id = db.Column(db.Integer, db.ForeignKey("users._id"), nullable=False)
+    _id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("users.public_id"), nullable=False)
     course_id = db.Column(db.Integer, db.ForeignKey("courses._id"), nullable=False)
-    issued_at = db.Column(db.String, nullable=False) 
+    issued_on = db.Column(db.String, nullable=False) 
     
     # Relationships
     student = db.relationship("User", back_populates="certificates")
     course = db.relationship("Course", back_populates="certificates")
 
     # Serialization rules
-    serialize_rules = ("-student.certificates", "-course.certificates")
+    serialize_rules = ("-student.certificates", "-student.courses", "-student.email", "-course.certificates", "-course.students")
 
     def __repr__(self):
         return f"<Certificate Student: {self.student_id}, Course: {self.course_id}, Issued: {self.issued_at}>"
