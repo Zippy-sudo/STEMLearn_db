@@ -7,7 +7,7 @@ from config import db, metadata, flask_bcrypt
 enrollments = db.Table(
     "enrollments",
     metadata,
-    db.Column("student_id", db.Integer, db.ForeignKey("users._id"), primary_key=True),
+    db.Column("student_id", db.Integer, db.ForeignKey("users.public_id"), primary_key=True),
     db.Column("course_id", db.Integer, db.ForeignKey("courses._id"), primary_key=True)
 )
 
@@ -55,7 +55,7 @@ class Course(db.Model, SerializerMixin):
     description = db.Column(db.Text, nullable=False)
     subject = db.Column(db.String, nullable=False)
     duration = db.Column(db.Integer, nullable=False)  
-    teacher_id = db.Column(db.Integer, db.ForeignKey('users._id'), nullable=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('users.public_id'), nullable=True)
     created_at = db.Column(db.String, nullable=False)
 
     # Relationships

@@ -54,8 +54,16 @@ with app.app_context():
                 role = "STUDENT",
                 created_at = (datetime.now()).strftime("%d/%m/%Y, %H:%M:%S")
                 )
+    User7 = User(
+                name = "Alexis Foster",
+                public_id = str(uuid4()),
+                email = "alexisfoster@gmail.com",
+                password_hash = "mouth",
+                role = "TEACHER",
+                created_at = (datetime.now()).strftime("%d/%m/%Y, %H:%M:%S")
+                )
 
-    db.session.add_all([User1, User2, User3, User4, User5, User6])
+    db.session.add_all([User1, User2, User3, User4, User5, User6, User7])
     db.session.commit()
 
     print("Generating Courses...")
@@ -63,21 +71,21 @@ with app.app_context():
     Course1 = Course(title = "Bachelor of Science in Computer Science",
                      description = "This program focuses on the theory, development, and application of software and systems. It prepares students for careers in programming, software engineering, data analysis, cybersecurity, and more.",subject = "Computers",
                      duration = 3,
-                     teacher_id = User2._id,
+                     teacher_id = User2.public_id,
                      created_at = (datetime.now()).strftime("%d/%m/%Y, %H:%M:%S")
                      )
-    Course2 = Course(title = " Bachelor of Science in Mechanical Engineering",
+    Course2 = Course(title = "Spinster of Science in Mechanical Engineering",
                      description = "This course covers the design, analysis, and manufacturing of mechanical systems and devices. Students learn to solve problems related to energy, materials, thermodynamics, and dynamics.",
                      subject = "Physics",
                      duration = 4,
-                     teacher_id = User2._id,
+                     teacher_id = User2.public_id,
                      created_at = (datetime.now()).strftime("%d/%m/%Y, %H:%M:%S")
                      )
-    Course3 = Course(title = " Bachelor of Science in Environmental Science",
+    Course3 = Course(title = "Bachelor of Science in Environmental Science",
                      description = "This course focuses on the study of the environment and the impact of human activities on natural systems. It equips students with the knowledge to address environmental challenges and promote sustainability.",
                      subject = "Biology",
                      duration =  3,
-                     teacher_id = User2._id,
+                     teacher_id = User7.public_id,
                      created_at = (datetime.now()).strftime("%d/%m/%Y, %H:%M:%S")
                      )
     
