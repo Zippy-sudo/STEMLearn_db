@@ -1,7 +1,7 @@
 from app import app
 from uuid import uuid4
 from datetime import datetime
-from models import db, User, Course, Certificate, enrollments
+from models import db, User, Course, Certificate, enrollments, Lesson
 
 with app.app_context():
 
@@ -10,6 +10,7 @@ with app.app_context():
     User.query.delete()
     Course.query.delete()
     Certificate.query.delete() 
+    Lesson.query.delete()
 
     print("Generating Users...")
 
@@ -102,6 +103,44 @@ with app.app_context():
 
     db.session.commit()
     
+    print("Generating Lessons...")
+
+    # Create Lessons
+    Lesson1 = Lesson(
+        title="Introduction to Programming",
+        content="This lesson covers the basics of programming, including variables, loops, and functions.",
+        video_url="https://example.com/intro-to-programming",
+        resources=["slides.pdf", "code_examples.zip"],
+        course_id=Course1._id,
+        created_at=datetime.now().strftime("%d/%m/%Y")
+    )
+    Lesson2 = Lesson(
+        title="Data Structures",
+        content="This lesson explains different data storage techniques, such as arrays, linked lists, and trees.",
+        video_url="https://example.com/data-structures",
+        resources=["slides.pdf", "practice_problems.pdf"],
+        course_id=Course1._id,
+        created_at=datetime.now().strftime("%d/%m/%Y")
+    )
+    Lesson3 = Lesson(
+        title="Thermodynamics",
+        content="This lesson covers the fundamentals of heat and energy transfer.",
+        video_url="https://example.com/thermodynamics",
+        resources=["slides.pdf", "lab_manual.pdf"],
+        course_id=Course2._id,
+        created_at=datetime.now().strftime("%d/%m/%Y")
+    )
+    Lesson4 = Lesson(
+        title="Environmental Impact Assessment",
+        content="This lesson focuses on analyzing the environmental effects of projects.",
+        video_url="https://example.com/environmental-impact",
+        resources=["slides.pdf", "case_studies.pdf"],
+        course_id=Course3._id,
+        created_at=datetime.now().strftime("%d/%m/%Y")
+    )
+
+    db.session.add_all([Lesson1, Lesson2, Lesson3, Lesson4])
+    db.session.commit()
     print("Generating Certificates...")
 
     certificates = [
