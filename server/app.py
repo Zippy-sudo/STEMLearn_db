@@ -527,6 +527,97 @@ class CertificateById(Resource):
         return make_response({"Success": "Certificate deleted successfully"}, 200)
         
 api.add_resource(CertificateById, "/certificates/<int:id>", endpoint="certificate_by_id")
+
+class Lessons(Resource):
+    # Get all lessons => ADMIN, TEACHER, STUDENT
+    def get(self):
+        token = request.cookies.get("jwtToken")
+
+        if not token or authorize(token, []) in [1, 2, 3]:
+            return make_response({"error": "Unauthorized or token expired"}, 401)
+
+        lessons = Lesson.query.all()
+        return make_response([lesson.to_dict() for lesson in lessons], 200) if lessons else make_response({"error": "No lessons found"}, 404)
+
+    # Create a lesson => ADMIN
+    def post(self):
+        token = request.cookies.get("jwtToken")
+
+        if not token or authorize(token, ["ADMIN"]) in [1, 2, 3]:
+            return make_response({"error": "Unauthorized or token expired"}, 401)
+
+        lesson_data = request.get_json()
+        if not lesson_data:
+            return make_response({"error": "Invalid data"}, 400)
+
+        # Ensure course exists before adding a lesson
+        course = Course.query.filter_by(_id=lesson_data.get("course_id")).first()
+        if not course:
+            return make_response({"error": "Course not found"}, 404)
+
+        try:
+            new_lesson = Lesson(
+                title=lesson_data.get("title"),
+                content=lesson_data.get("content"),
+                video_url=lesson_data.get("video_url"),
+                resources=lesson_data.get("resources"),
+                course_id=lesson_data.get("course_id"),
+                created_at=datetime.now().strftime("%d/%m/%Y"),
+            )
+            db.session.add(new_lesson)
+            db.session.commit()
+            return make_response(new_lesson.to_dict(), 201)
+        except ValueError as e:
+            db.session.rollback()
+            return make_response({"error": str(e)}, 500)
+
+
+class LessonById(Resource):
+    # Get a lesson => ADMIN, TEACHER, STUDENT
+    def get(self, id):
+        token = request.cookies.get("jwtToken")
+
+        if not token or authorize(token, []) in [1, 2, 3]:
+            return make_response({"error": "Unauthorized or token expired"}, 401)
+
+        lesson = Lesson.query.filter_by(_id=id).first_or_404(description=f"No lesson found with ID {id}")
+        return make_response(lesson.to_dict(), 200)
+
+    # Update a lesson => ADMIN, TEACHER
+    def patch(self, id):
+        token = request.cookies.get("jwtToken")
+
+        if not token or authorize(token, ["ADMIN", "TEACHER"]) in [1, 2, 3]:
+            return make_response({"error": "Unauthorized or token expired"}, 401)
+
+        lesson = Lesson.query.filter_by(_id=id).first_or_404(description=f"No lesson found with ID {id}")
+        lesson_data = request.get_json()
+
+        try:
+            for key, value in lesson_data.items():
+                if hasattr(lesson, key):
+                    setattr(lesson, key, value)
+            db.session.commit()
+            return make_response(lesson.to_dict(), 200)
+        except ValueError as e:
+            db.session.rollback()
+            return make_response({"error": str(e)}, 500)
+
+    # Delete a lesson => ADMIN
+    def delete(self, id):
+        token = request.cookies.get("jwtToken")
+
+        if not token or authorize(token, ["ADMIN"]) in [1, 2, 3]:
+            return make_response({"error": "Unauthorized or token expired"}, 401)
+
+        lesson = Lesson.query.filter_by(_id=id).first_or_404(description=f"No lesson found with ID {id}")
+        db.session.delete(lesson)
+        db.session.commit()
+        return make_response({"success": f"Lesson {id} deleted"}, 200)
+    
+api.add_resource(Lessons, "/lessons", endpoint="lessons")
+api.add_resource(LessonById, "/lessons/<int:id>", endpoint="lesson_by_id")
+    
     
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
