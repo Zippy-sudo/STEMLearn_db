@@ -62,9 +62,10 @@ class Course(db.Model, SerializerMixin):
     # Relationships
     students = db.relationship('User', secondary = enrollments, back_populates='courses')
     certificates = db.relationship('Certificate', back_populates='course', cascade='all, delete-orphan')
+    lessons = db.relationship("Lesson", back_populates="course", cascade="all, delete-orphan")
 
     # Serialization rules
-    serialize_rules = ('-students.courses', '-certificates.course')
+    serialize_rules = ('-students.courses', '-certificates.course', '-lessons.course')
 
     def __repr__(self):
         return f"<Course {self.title}>"
@@ -87,3 +88,24 @@ class Certificate(db.Model, SerializerMixin):
 
     def __repr__(self):
         return f"<Certificate Student: {self.student_id}, Course: {self.course_id}, Issued: {self.issued_at}>"
+    
+# Lesson Table
+class Lesson(db.Model, SerializerMixin):
+    __tablename__ = "lessons"
+
+    _id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String, nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    video_url = db.Column(db.String, nullable=True)
+    resources = db.Column(db.JSON, nullable=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("courses._id"), nullable=False)
+    created_at = db.Column(db.String, nullable=False)
+
+    # Relationships
+    course = db.relationship("Course", back_populates="lessons")
+
+    # Serialization rules
+    serialize_rules = ("-course.lessons",)
+
+    def __repr__(self):
+        return f"<Lesson {self.title}, Course ID: {self.course_id}>"
