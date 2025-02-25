@@ -4,7 +4,7 @@ import os
 import jwt
 from uuid import uuid4
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from flask import request, jsonify, make_response
 from flask_restful import Resource
 
@@ -57,8 +57,17 @@ def login():
     if not user or not user.authenticate_user(user_details.get("password")):
         return make_response({"Error" : "Invalid email or password."}, 400)
     elif user and user.authenticate_user(user_details.get("password")):
-        token = jwt.encode({"public_id" : user.public_id, "exp" : (datetime.utcnow() + timedelta(hours=24))}, SECRET_KEY, algorithm="HS256")
-        return make_response({"token" : f"{token}"})
+        token = jwt.encode({"public_id" : user.public_id, "exp" : (datetime.now(timezone.utc) + timedelta(hours=1))}, SECRET_KEY, algorithm="HS256")
+        response = make_response({"Success" : "Log in successful"}, 200)
+        response.set_cookie("jwtToken", token, httponly=True, secure=True, samesite="Strict", expires=(datetime.now(timezone.utc) + timedelta(hours=1)))
+        return response
+    
+# Logout
+@app.route("/logout", methods=["GET"])
+def logout():
+    response = make_response({"Success" : "You've been logged out"})
+    response.set_cookie("jwtToken", "", httponly=True, secure=True, samesite="Strict", expires=0)
+    return response
     
 # Signup
 @app.route("/signup", methods=["POST"])
@@ -80,16 +89,32 @@ def signup():
         )
     db.session.add(new_user)
     db.session.commit()
-    return make_response(new_user.to_dict(), 201)
+    token = jwt.encode({"public_id" : new_user.public_id, "exp" : (datetime.now(timezone.utc) + timedelta(hours=1))}, SECRET_KEY, algorithm="HS256")
+    response = make_response({"Success" : "Sign-up successful"}, 200)
+    response.set_cookie("jwtToken", token, httponly=True, secure=True, samesite="Strict", expires=(datetime.now(timezone.utc) + timedelta(hours=1)))
+    return response
+
+# Get Courses without signing in
+@app.route("/unauthCourses", methods=["GET"])
+def get_unauth_courses():
+    
+    courses = Course.query.all()
+
+    if len(courses) > 0:
+        courses_dict = [course.to_dict(only = ("_id", "title", "description", "subject", "duration")) for course in courses]
+        return make_response(courses_dict, 200)
+    
+    return make_response({"Error" : "No courses in database"})
 
 # Users
 class Users(Resource):
 
     # Get all Users => ADMIN,TEACHER
     def get(self):
+        token = request.cookies.get("jwtToken")
         
-        if "Authorization" in request.headers:
-                auth_status = authorize(request.headers.get("Authorization"),["STUDENT"])
+        if token:
+                auth_status = authorize(token,["STUDENT"])
             
                 if auth_status == 1:
                     return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -112,9 +137,10 @@ class Users(Resource):
 
     # Create a User => ADMIN
     def post(self):
+        token = request.cookies.get("jwtToken")
 
-        if "Authorization" in request.headers:
-            auth_status = authorize(request.headers.get("Authorization"),["STUDENT", "TEACHER"])
+        if token:
+            auth_status = authorize(token,["STUDENT", "TEACHER"])
             
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -134,7 +160,7 @@ class Users(Resource):
                             email = new_user_data.get("email"),
                             password_hash = new_user_data.get("password"),
                             role = new_user_data.get("role").upper(),
-                            created_at = (datetime.now()).strftime("%d/%m/%Y")
+                            created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                             )
                 db.session.add(new_user)
                 db.session.commit()
@@ -149,9 +175,10 @@ class UserById(Resource):
 
     # Get a single User by ID => ADMIN, TEACHER
     def get(self, id):
+        token = request.cookies.get("jwtToken")
 
-        if "Authorization" in request.headers:
-            auth_status = authorize(request.headers.get("Authorization"),["STUDENT"])
+        if token:
+            auth_status = authorize(token,["STUDENT"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -162,16 +189,17 @@ class UserById(Resource):
 
         user = User.query.filter_by(_id = id).first_or_404(description=f"No user with Id: {id}")
 
-        if auth_status == "TEACHER":
+        if auth_status.get("role") == "TEACHER":
             return make_response(user.to_dict(rules = ('-_id','-role',)), 200)
 
         return make_response(user.to_dict(), 200)
 
     # Update a User => ADMIN
     def patch(self, id):
+        token = request.cookies.get("jwtToken")
 
-        if "Authorization" in request.headers:
-            auth_status = authorize(request.headers.get("Authorization"),["TEACHER","STUDENT"])
+        if token:
+            auth_status = authorize(token,["TEACHER","STUDENT"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -195,9 +223,10 @@ class UserById(Resource):
 
     # Delete a User => ADMIN
     def delete(self, id):
+        token = request.cookies.get("jwtToken")
 
-        if "Authorization" in request.headers:
-            auth_status = authorize(request.headers.get("Authorization"),["TEACHER","STUDENT"])
+        if token:
+            auth_status = authorize(token,["TEACHER","STUDENT"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -219,8 +248,10 @@ class Courses(Resource):
     # Get all Courses => ADMIN, TEACHER, STUDENT 
     def get(self):
 
-        if "Authorization" in request.headers:
-            auth_status = authorize(request.headers.get("Authorization"),[])
+        token = request.cookies.get('jwtToken')
+
+        if token:
+            auth_status = authorize(token, [])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -240,15 +271,18 @@ class Courses(Resource):
                 return make_response(courses_dict, 200)
             
             courses_dict = [course.to_dict() for course in courses]
-            return make_response(courses_dict, 200)
+            response = make_response(courses_dict, 200)
+            response.headers['Access-Control-Allow-Origin'] = "http://localhost:3000"
+            return response
         else:
             return make_response({"Error": "No courses in Database"}, 404)
 
     # Create a new Course => ADMIN
     def post(self):
+        token = request.cookies.get("jwtToken")
 
-        if "Authorization" in request.headers:
-            auth_status = authorize(request.headers.get("Authorization"),["TEACHER", "STUDENT"])
+        if token:
+            auth_status = authorize(token,["TEACHER", "STUDENT"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -268,7 +302,7 @@ class Courses(Resource):
                                     subject = new_course_data.get('subject'),
                                     duration = new_course_data.get('duration'),
                                     teacher_id = new_course_data.get('teacher_id') if hasattr(new_course_data, "teacher_id") else 0,
-                                    created_at = (datetime.now()).strftime("%d/%m/%Y")
+                                    created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                                     )
                 db.session.add(new_course)
                 db.session.commit()
@@ -283,9 +317,10 @@ class CourseById(Resource):
 
     # Get a single Course by ID => ADMIN, TEACHER, STUDENT
     def get(self, id):
+        token = request.cookies.get("jwtToken")
 
-        if "Authorization" in request.headers:
-            auth_status = authorize(request.headers.get("Authorization"),[""])
+        if token:
+            auth_status = authorize(token,[""])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -306,9 +341,10 @@ class CourseById(Resource):
 
     # Update a Course => ADMIN, TEACHER
     def patch(self, id):
+        token = request.cookies.get("jwtToken")
 
-        if "Authorization" in request.headers:
-            auth_status = authorize(request.headers.get("Authorization"),["STUDENT"])
+        if token:
+            auth_status = authorize(token,["STUDENT"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -346,9 +382,10 @@ class CourseById(Resource):
 
     # Delete a Course => ADMIN
     def delete(self, id):
+        token = request.cookies.get("jwtToken")
 
-        if "Authorization" in request.headers:
-            auth_status = authorize(request.headers.get("Authorization"),["TEACHER","STUDENT"])
+        if token:
+            auth_status = authorize(token,["TEACHER","STUDENT"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -369,9 +406,10 @@ class Certificates(Resource):
 
     # Get all Certificates => ADMIN, STUDENT
     def get(self):
+        token = request.cookies.get("jwtToken")
 
-        if "Authorizatio" in request.headers:
-            auth_status = authorize(request.headers.get("Authorizatio"),["TEACHER"])
+        if token:
+            auth_status = authorize(token,["TEACHER"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -395,11 +433,11 @@ class Certificates(Resource):
     
     # Create a Cerificate => ADMIN
     def post(self):
-
+        token = request.cookies.get("jwtToken")
         certificate_details = request.get_json()
 
-        if "Authorizatio" in request.headers:
-            auth_status = authorize(request.headers.get("Authorizatio"),["TEACHER", "STUDENT"])
+        if token:
+            auth_status = authorize(token ,["TEACHER", "STUDENT"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -412,7 +450,7 @@ class Certificates(Resource):
             try:
                 new_certificate = Certificate(user_id = certificate_details.get("user_id"),
                                       course_id = certificate_details.get("course_id"),
-                                      issued_on = (datetime.now()).strftime("%d/%m/%Y")
+                                      issued_on = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                                       )
                 db.session.add(new_certificate)
                 db.session.commit()
@@ -427,9 +465,10 @@ class CertificateById(Resource):
 
     # Get a single Certificate by Id => ADMIN
     def get(self, id):
+        token = request.cookies.get("jwtToken")
 
-        if "Authorizatio" in request.headers:
-            auth_status = authorize(request.headers.get("Authorizatio"),["TEACHER", "STUDENT"])
+        if token:
+            auth_status = authorize(token,["TEACHER", "STUDENT"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -443,9 +482,10 @@ class CertificateById(Resource):
     
     # Update a Certificate => ADMIN
     def patch(self, id):
+        token = request.cookies.get("jwtToken")
                 
-        if "Authorizatio" in request.headers:
-            auth_status = authorize(request.headers.get("Authorizatio"),["TEACHER","STUDENT"])
+        if token:
+            auth_status = authorize(token,["TEACHER","STUDENT"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -469,9 +509,10 @@ class CertificateById(Resource):
 
     # Delete a Certificate => ADMIN
     def delete(self, id):
+        token = request.cookies.get("jwtToken")
 
-        if "Authorizatio" in request.headers:
-            auth_status = authorize(request.headers.get("Authorizatio"),["TEACHER","STUDENT"])
+        if token:
+            auth_status = authorize(token,["TEACHER","STUDENT"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
