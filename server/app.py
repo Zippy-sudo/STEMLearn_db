@@ -610,6 +610,199 @@ class LessonById(Resource):
     
 api.add_resource(Lessons, "/lessons", endpoint="lessons")
 api.add_resource(LessonById, "/lessons/<int:id>", endpoint="lesson_by_id")
+
+class Quizzes(Resource):
+    # Get all quizzes => ADMIN, TEACHER, STUDENT
+    def get(self):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:], [])
+
+            if auth_status == 1:
+                return make_response({"Error": "Unauthorized access"}, 401)
+            elif auth_status in [2, 3]:
+                return make_response({"Error": "Invalid Token"}, 401)
+        else:
+            return make_response({"Error": "Sign in to continue"}, 401)
+
+        quizzes = Quiz.query.all()
+
+        if quizzes:
+            if auth_status.get("role") == "STUDENT":
+                quizzes_dict = [quiz.to_dict(include_answers=False) for quiz in quizzes]
+            else:
+                quizzes_dict = [quiz.to_dict(include_answers=True) for quiz in quizzes]
+
+            return make_response(quizzes_dict, 200)
+        return make_response({"Error": "No quizzes found"}, 404)
+
+    # Create a new quiz => ADMIN
+    def post(self):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:], ["TEACHER", "STUDENT"])
+
+            if auth_status == 1:
+                return make_response({"Error": "Unauthorized access"}, 401)
+            elif auth_status in [2, 3]:
+                return make_response({"Error": "Invalid Token"}, 401)
+        else:
+            return make_response({"Error": "Sign in to continue"}, 401)
+
+        new_quiz_data = request.get_json()
+
+        if not new_quiz_data:
+            return make_response({"Error": "Invalid data"}, 400)
+
+        try:
+            new_quiz = Quiz(
+                lesson_id=new_quiz_data.get('lesson_id'),
+                student_id=new_quiz_data.get('student_id'),
+                question=new_quiz_data.get('question'),
+                options=new_quiz_data.get('options'),
+                correct_answer=new_quiz_data.get('correct_answer'),
+                created_at=datetime.now(timezone.utc)
+            )
+            db.session.add(new_quiz)
+            db.session.commit()
+            return make_response(new_quiz.to_dict(include_answers=True), 201)
+
+        except Exception as e:
+            db.session.rollback()
+            return make_response({"Error": f"{e}"}, 500)
+        
+class QuizById(Resource):
+    # Get a specific quiz => ADMIN, TEACHER, STUDENT
+    def get(self, id):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:], [""])
+
+            if auth_status == 1:
+                return make_response({"Error": "Unauthorized access"}, 401)
+            elif auth_status in [2, 3]:
+                return make_response({"Error": "Invalid Token"}, 401)
+        else:
+            return make_response({"Error": "Sign in to continue"}, 401)
+
+        quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with ID: {id}")
+
+        if auth_status.get("role") == "STUDENT":
+            return make_response(quiz.to_dict(include_answers=False), 200)
+        
+        return make_response(quiz.to_dict(include_answers=True), 200)
+
+    # Update a quiz => ADMIN, TEACHER
+    def patch(self, id):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:], ["STUDENT"])
+
+            if auth_status == 1:
+                return make_response({"Error": "Unauthorized access"}, 401)
+            elif auth_status in [2, 3]:
+                return make_response({"Error": "Invalid Token"}, 401)
+        else:
+            return make_response({"Error": "Sign in to continue"}, 401)
+
+        quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with ID: {id}")
+        new_quiz_data = request.get_json()
+
+        try:
+            for key, value in new_quiz_data.items():
+                if hasattr(quiz, key):
+                    setattr(quiz, key, value)
+                    db.session.commit()
+
+            return make_response(quiz.to_dict(include_answers=True), 200)
+
+        except Exception as e:
+            db.session.rollback()
+            return make_response({"Error": f"{e}"}, 500)
+
+    # Attempt a quiz => STUDENT (Max 3 attempts per quiz, must complete all)
+    def post(self, lesson_id, quiz_id):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:], ["ADMIN", "TEACHER"])
+            if auth_status == 1:
+                return make_response({"Error": "Unauthorized access"}, 401)
+            elif auth_status in [2, 3]:
+                return make_response({"Error": "Invalid Token"}, 401)
+        else:
+            return make_response({"Error": "Sign in to continue"}, 401)
+
+        student_id = auth_status.get("id")
+        role = auth_status.get("role")
+
+        if role != "STUDENT":
+            return make_response({"Error": "Only students can attempt quizzes"}, 403)
+
+        # Fetch quiz
+        quiz = Quiz.query.filter_by(_id=quiz_id, lesson_id=lesson_id, student_id=student_id).first_or_404(
+            description=f"No Quiz found with ID: {quiz_id} for this lesson"
+        )
+
+        # Check max attempts per quiz
+        if quiz.attempts >= 3:
+            return make_response({"Error": "No more attempts left for this quiz"}, 403)
+
+        # Validate user input
+        answer_data = request.get_json()
+        user_answer = answer_data.get("answer")
+
+        if user_answer is None:
+            return make_response({"Error": "Answer is required"}, 400)
+
+        # Record the attempt
+        quiz.attempts += 1
+        if user_answer == quiz.correct_answer:
+            quiz.correct = True  
+
+        db.session.commit()
+
+        # Check if all quizzes in the lesson are completed
+        total_quizzes = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id).count()
+        completed_quizzes = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id, attempts__gt=0).count()
+
+        if completed_quizzes == total_quizzes:
+            # Calculate Grade
+            correct_answers = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id, correct=True).count()
+            grade = (correct_answers / total_quizzes) * 100  
+
+            return make_response({
+                "Success": "All quizzes completed!",
+                "Grade": f"{grade:.2f}%",
+                "Message": "You can retry to improve your score if you have attempts left."
+            }, 200)
+
+        return make_response({"Success": "Quiz submitted! Proceed to the next quiz."}, 200)
+
+    # Delete a quiz => ADMIN
+    def delete(self, id):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:], ["TEACHER", "STUDENT"])
+
+            if auth_status == 1:
+                return make_response({"Error": "Unauthorized access"}, 401)
+            elif auth_status in [2, 3]:
+                return make_response({"Error": "Invalid Token"}, 401)
+        else:
+            return make_response({"Error": "Sign in to continue"}, 401)
+
+        quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with ID: {id}")
+
+        db.session.delete(quiz)
+        db.session.commit()
+
+        return make_response({"Success": "Quiz deleted successfully"}, 200)
     
     
 if __name__ == '__main__':
