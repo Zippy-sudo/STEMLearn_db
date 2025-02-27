@@ -26,9 +26,10 @@ class User(db.Model, SerializerMixin):
     # Relationships
     courses = db.relationship("Course", secondary = enrollments, back_populates="students")
     certificates = db.relationship("Certificate", back_populates="student", cascade="all, delete-orphan")
+    quizzes = db.relationship("Quiz", back_populates="student", cascade="all, delete-orphan")
 
     # Serialization rules
-    serialize_rules = ('-courses.students', '-courses.certificates','-certificates.student', '-certificates.course', '-_password_hash')
+    serialize_rules = ('-courses.students', '-courses.certificates','-certificates.student', '-certificates.course', '-_password_hash', '-quizzes.student')
 
     def __repr__(self):
         return f'<User {self._id}, Name: {self.name}, Role: {self.role}>'
@@ -103,9 +104,36 @@ class Lesson(db.Model, SerializerMixin):
 
     # Relationships
     course = db.relationship("Course", back_populates="lessons")
-
+    quizzes = db.relationship("Quiz", back_populates="lesson", cascade="all, delete-orphan")
+ 
     # Serialization rules
-    serialize_rules = ("-course.lessons",)
+    serialize_rules = ("-course.lessons", "-quizzes.lesson")
 
     def __repr__(self):
         return f"<Lesson {self.title}, Course ID: {self.course_id}>"
+    
+from config import db
+from sqlalchemy_serializer import SerializerMixin
+
+class Quiz(db.Model, SerializerMixin):
+    __tablename__ = "quizzes"
+
+    _id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey("lessons._id"), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey("users.public_id"), nullable=False)
+    question = db.Column(db.Text, nullable=False)
+    options = db.Column(db.JSON, nullable=False)  
+    correct_answer = db.Column(db.String, nullable=False)
+    attempts = db.Column(db.Integer, default=0)  
+    created_at = db.Column(db.String, nullable=False)
+
+    # Relationships
+    lesson = db.relationship("Lesson", back_populates="quizzes")
+    student = db.relationship("User", back_populates="quizzes")
+
+    # Serialization rules
+    serialize_rules = ('-lesson.quizzes', '-student.quizzes')
+
+    def __repr__(self):
+        return f"<Lesson {self.title}, Course ID: {self.course_id}>"
+
