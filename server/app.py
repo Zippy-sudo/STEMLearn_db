@@ -14,6 +14,8 @@ from models import User, Course, Certificate
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 
+from jwt import ExpiredSignatureError, InvalidTokenError
+
 # Params are:
 #     Token => JWT
 #     Disallowed_Users => an array of who  NOT  to let access the route e.g ["Teacher","Student"]
@@ -26,18 +28,16 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 def authorize(token,disallowed_users):
     try:
         identity = jwt.decode(token, SECRET_KEY, algorithms="HS256")
-        current_user = User.query.filter_by(public_id = identity.get("public_id")).first()
-        if current_user and current_user.role in disallowed_users:
-            status = 1
-            return status
-        elif not current_user:
-            status = 2
-            return status
-        status = {"role" : current_user.role, "public_id" : identity.get("public_id")}
-        return status
-    except jwt.ExpiredSignatureError:
-        status = 3
-        return status
+        current_user = User.query.filter_by(public_id=identity.get("public_id")).first()
+        if not current_user:
+            return 2
+        if current_user.role in disallowed_users:
+            return 1
+        return {"role": current_user.role, "public_id": identity.get("public_id")}
+    except ExpiredSignatureError:
+        return 3
+    except InvalidTokenError:
+        return 4
 
 # Root
 @app.route("/", methods=["GET"])
@@ -58,7 +58,7 @@ def login():
         return make_response({"Error" : "Invalid email or password."}, 400)
     elif user and user.authenticate_user(user_details.get("password")):
         token = jwt.encode({"public_id" : user.public_id, "exp" : (datetime.now(timezone.utc) + timedelta(hours=1))}, SECRET_KEY, algorithm="HS256")
-        return make_response({"Token" : f"{token}"}, 200)
+        return make_response({"Token" : f"{token}", "role": user.role}, 200)
     
 # Logout
 @app.route("/logout", methods=["GET"])
@@ -272,7 +272,7 @@ class Courses(Resource):
 
     # Create a new Course => ADMIN
     def post(self):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],["TEACHER", "STUDENT"])
@@ -310,7 +310,7 @@ class CourseById(Resource):
 
     # Get a single Course by ID => ADMIN, TEACHER, STUDENT
     def get(self, id):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],[""])
@@ -334,7 +334,7 @@ class CourseById(Resource):
 
     # Update a Course => ADMIN, TEACHER
     def patch(self, id):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],["STUDENT"])
@@ -375,7 +375,7 @@ class CourseById(Resource):
 
     # Delete a Course => ADMIN
     def delete(self, id):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],["TEACHER","STUDENT"])
