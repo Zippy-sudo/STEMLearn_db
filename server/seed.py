@@ -1,16 +1,17 @@
 from app import app
 from uuid import uuid4
 from datetime import datetime, timezone
-from models import db, User, Course, Certificate, Lesson, enrollments
+from models import db, User, Enrollment, Course, Certificate, Lesson, Progress
 
 with app.app_context():
 
-    db.session.query(enrollments).delete()
     db.session.commit()
     User.query.delete()
+    Enrollment.query.delete()
     Course.query.delete()
-    Certificate.query.delete() 
+    Certificate.query.delete()
     Lesson.query.delete()
+    Progress.query.delete()
 
     print("Generating Users...")
 
@@ -80,7 +81,6 @@ with app.app_context():
                      description = "This course covers the design, analysis, and manufacturing of mechanical systems and devices. Students learn to solve problems related to energy, materials, thermodynamics, and dynamics.",
                      subject = "Physics",
                      duration = 4,
-                     teacher_id = User2.public_id,
                      created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                      )
     Course3 = Course(title = "Bachelor of Science in Environmental Science",
@@ -96,11 +96,38 @@ with app.app_context():
 
     print("Assigning Users to Courses...")
 
-    Course1.students.append(User3)
-    Course2.students.append(User4)
-    Course3.students.append(User5)
-    Course3.students.append(User3)
-
+    Enrollment1 = Enrollment(student_id=User3.public_id,
+                             course_id=Course1._id,
+                             enrolled_on=(datetime.now(timezone.utc)).strftime("%d/%m/%Y"),
+                             completion_percentage= float(0) 
+                             )
+    Enrollment2 = Enrollment(student_id=User4.public_id,
+                             course_id=Course2._id,
+                             enrolled_on=(datetime.now(timezone.utc)).strftime("%d/%m/%Y"),
+                             completion_percentage= float(10) 
+                             )
+    Enrollment3 = Enrollment(student_id=User5.public_id,
+                             course_id=Course3._id,
+                             enrolled_on=(datetime.now(timezone.utc)).strftime("%d/%m/%Y"),
+                             completion_percentage= float(20) 
+                             )
+    Enrollment4 = Enrollment(student_id=User4.public_id,
+                             course_id=Course3._id,
+                             enrolled_on=(datetime.now(timezone.utc)).strftime("%d/%m/%Y"),
+                             completion_percentage= float(35) 
+                             )
+    Enrollment5 = Enrollment(student_id=User6.public_id,
+                             course_id=Course2._id,
+                             enrolled_on=(datetime.now(timezone.utc)).strftime("%d/%m/%Y"),
+                             completion_percentage= float(100) 
+                             )
+    Enrollment6 = Enrollment(student_id=User7.public_id,
+                             course_id=Course3._id,
+                             enrolled_on=(datetime.now(timezone.utc)).strftime("%d/%m/%Y"),
+                             completion_percentage= float(70) 
+                             )
+    
+    db.session.add_all([Enrollment1, Enrollment2, Enrollment3, Enrollment4, Enrollment5, Enrollment6])
     db.session.commit()
     
     print("Generating Lessons...")
@@ -141,17 +168,23 @@ with app.app_context():
 
     db.session.add_all([Lesson1, Lesson2, Lesson3, Lesson4])
     db.session.commit()
+
     print("Generating Certificates...")
 
-    certificates = [
-        Certificate(student_id=User3.public_id, course_id=Course1._id, issued_on=datetime.now(timezone.utc).strftime("%d/%m/%Y")),
-        Certificate(student_id=User4.public_id, course_id=Course2._id, issued_on=datetime.now(timezone.utc).strftime("%d/%m/%Y")),
-        Certificate(student_id=User5.public_id, course_id=Course3._id, issued_on=datetime.now(timezone.utc).strftime("%d/%m/%Y")),
-        Certificate(student_id=User3.public_id, course_id=Course3._id, issued_on=datetime.now(timezone.utc).strftime("%d/%m/%Y"))
-    ]
+    Certificate1 = Certificate(enrollment_id=Enrollment5._id, issued_on=datetime.now(timezone.utc).strftime("%d/%m/%Y"))
 
-    db.session.add_all(certificates)
+    db.session.add(Certificate1)
     db.session.commit()
 
+    print("Generating Progresses...")
+
+    Progress1 = Progress(enrollment_id=Enrollment1._id, lesson_id=Lesson1._id)
+    Progress2 = Progress(enrollment_id=Enrollment2._id, lesson_id=Lesson3._id)
+    Progress3 = Progress(enrollment_id=Enrollment3._id, lesson_id=Lesson4._id)
+    Progress4 = Progress(enrollment_id=Enrollment4._id, lesson_id=Lesson4._id)
+    Progress5 = Progress(enrollment_id=Enrollment5._id, lesson_id=Lesson3._id)
+
+    db.session.add_all([Progress1, Progress2, Progress3, Progress4, Progress5])
+    db.session.commit()
 
     print("All Good.")

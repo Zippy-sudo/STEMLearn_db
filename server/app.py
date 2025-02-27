@@ -9,7 +9,7 @@ from flask import request, jsonify, make_response
 from flask_restful import Resource
 
 from config import app, db, api
-from models import User, Course, Certificate
+from models import User, Enrollment, Course, Certificate, Progress
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -58,7 +58,7 @@ def login():
         return make_response({"Error" : "Invalid email or password."}, 400)
     elif user and user.authenticate_user(user_details.get("password")):
         token = jwt.encode({"public_id" : user.public_id, "exp" : (datetime.now(timezone.utc) + timedelta(hours=1))}, SECRET_KEY, algorithm="HS256")
-        return make_response({"Token" : f"{token}"}, 200)
+        return make_response({"Token" : f"{token}", "Role": f"{user.role}"}, 200)
     
 # Logout
 @app.route("/logout", methods=["GET"])
@@ -87,7 +87,7 @@ def signup():
     db.session.add(new_user)
     db.session.commit()
     token = jwt.encode({"public_id" : new_user.public_id, "exp" : (datetime.now(timezone.utc) + timedelta(hours=1))}, SECRET_KEY, algorithm="HS256")
-    return make_response({"Token" : f"{token}"}, 200)
+    return make_response({"Token" : f"{token}", "Role": f"{new_user.role}"}, 200)
 
 # Get Courses without signing in
 @app.route("/unauthCourses", methods=["GET"])
@@ -101,12 +101,15 @@ def get_unauth_courses():
     
     return make_response({"Error" : "No courses in database"})
 
+
+
+
 # Users
 class Users(Resource):
 
     # Get all Users => ADMIN,TEACHER
     def get(self):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
         
         if token:
                 auth_status = authorize(token[7:],["STUDENT"])
@@ -122,7 +125,7 @@ class Users(Resource):
 
         if len(users) > 0:
             if (auth_status.get("role") == "TEACHER"):
-                my_students_dict = [user.to_dict(rules = ('-_id','-role',)) for user in users for course in user.courses if course.teacher_id == auth_status.get("public_id")]
+                my_students_dict = [user.to_dict(only = ('name')) for user in users for course in user.courses if course.teacher_id == auth_status.get("public_id")]
                 return make_response(my_students_dict, 200)
             
             users_dict = [user.to_dict() for user in users]
@@ -132,7 +135,7 @@ class Users(Resource):
 
     # Create a User => ADMIN
     def post(self):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],["STUDENT", "TEACHER"])
@@ -170,10 +173,10 @@ class UserById(Resource):
 
     # Get a single User by ID => ADMIN, TEACHER
     def get(self, id):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
-            auth_status = authorize(token[7,],["STUDENT"])
+            auth_status = authorize(token[7:],["STUDENT"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -182,7 +185,7 @@ class UserById(Resource):
         else:
             return make_response({"Error" : "Sign in to continue"}, 401)
 
-        user = User.query.filter_by(_id = id).first_or_404(description=f"No user with Id: {id}")
+        user = User.query.filter_by(public_id = id).first_or_404(description=f"No user with Id: {id}")
 
         if auth_status.get("role") == "TEACHER":
             return make_response(user.to_dict(rules = ('-_id','-role',)), 200)
@@ -191,7 +194,7 @@ class UserById(Resource):
 
     # Update a User => ADMIN
     def patch(self, id):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],["TEACHER","STUDENT"])
@@ -203,7 +206,7 @@ class UserById(Resource):
         else:
             return make_response({"Error" : "Sign in to continue"}, 401)
 
-        user = User.query.filter_by(_id = id).first_or_404(description=f"No user with Id: {id}")
+        user = User.query.filter_by(public_id = id).first_or_404(description=f"No user with Id: {id}")
         user_data = request.get_json()
         
         try:
@@ -218,7 +221,7 @@ class UserById(Resource):
 
     # Delete a User => ADMIN
     def delete(self, id):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],["TEACHER","STUDENT"])
@@ -230,13 +233,15 @@ class UserById(Resource):
         else:
             return make_response({"Error" : "Sign in to continue"}, 401)
 
-        user = User.query.filter_by(_id = id).first_or_404(description=f"No user with Id: {id}")
+        user = User.query.filter_by(public_id = id).first_or_404(description=f"No user with Id: {id}")
         db.session.delete(user)
         db.session.commit()
         return make_response({"Success": "User deleted successfully"}, 200)
 
-api.add_resource(UserById, "/users/<int:id>", endpoint="user_by_id")
-    
+api.add_resource(UserById, "/users/<string:id>", endpoint="user_by_id")
+
+
+
 # Courses
 class Courses(Resource):
     
@@ -272,7 +277,7 @@ class Courses(Resource):
 
     # Create a new Course => ADMIN
     def post(self):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],["TEACHER", "STUDENT"])
@@ -310,7 +315,7 @@ class CourseById(Resource):
 
     # Get a single Course by ID => ADMIN, TEACHER, STUDENT
     def get(self, id):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],[""])
@@ -334,7 +339,7 @@ class CourseById(Resource):
 
     # Update a Course => ADMIN, TEACHER
     def patch(self, id):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],["STUDENT"])
@@ -375,7 +380,7 @@ class CourseById(Resource):
 
     # Delete a Course => ADMIN
     def delete(self, id):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],["TEACHER","STUDENT"])
@@ -394,12 +399,14 @@ class CourseById(Resource):
         
 api.add_resource(CourseById, "/courses/<int:id>", endpoint="course_by_id")
 
+
+
 # Certificates
 class Certificates(Resource):
 
     # Get all Certificates => ADMIN, STUDENT
     def get(self):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],["TEACHER"])
@@ -424,9 +431,9 @@ class Certificates(Resource):
     
         return make_response({"Error": "No certificates in Database"}, 404)
     
-    # Create a Cerificate => ADMIN
+    # Create a Certificate => ADMIN
     def post(self):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
         certificate_details = request.get_json()
 
         if token:
@@ -441,8 +448,8 @@ class Certificates(Resource):
         
         if certificate_details:
             try:
-                new_certificate = Certificate(user_id = certificate_details.get("user_id"),
-                                      course_id = certificate_details.get("course_id"),
+                new_certificate = Certificate(
+                                      enrollment_id = certificate_details.get("enrollment_id"),
                                       issued_on = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                                       )
                 db.session.add(new_certificate)
@@ -450,7 +457,7 @@ class Certificates(Resource):
             except ValueError:
                 return make_response({"Error" : "Please enter valid Certificate details"}, 400)
             
-        return make_response({"Error" : "Please enter valid Certificate details"}, 400)
+        return make_response({"Success" : "Certificate created"}, 200)
     
 api.add_resource(Certificates, "/certificates", endpoint="certificates")
 
@@ -458,7 +465,7 @@ class CertificateById(Resource):
 
     # Get a single Certificate by Id => ADMIN
     def get(self, id):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],["TEACHER", "STUDENT"])
@@ -471,11 +478,11 @@ class CertificateById(Resource):
             return make_response({"Error" : "Sign in to continue"}, 401)
         
         certificate = Certificate.query.filter_by(_id = id).first_or_404(description=f"No Certificate with Id: {id}")
-        return make_response(certificate.to_dict(), 200)
+        return make_response(certificate.to_dict(rules = ('-enrollment.course.lessons',)), 200)
     
     # Update a Certificate => ADMIN
     def patch(self, id):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
                 
         if token:
             auth_status = authorize(token[7:],["TEACHER","STUDENT"])
@@ -502,7 +509,7 @@ class CertificateById(Resource):
 
     # Delete a Certificate => ADMIN
     def delete(self, id):
-        token = request.cookies.get("Authorization")
+        token = request.headers.get("Authorization")
 
         if token:
             auth_status = authorize(token[7:],["TEACHER","STUDENT"])
@@ -520,6 +527,137 @@ class CertificateById(Resource):
         return make_response({"Success": "Certificate deleted successfully"}, 200)
         
 api.add_resource(CertificateById, "/certificates/<int:id>", endpoint="certificate_by_id")
+
+
+
+# Progresses
+class Progresses(Resource):
+
+    # Get all Progresses => ADMIN, STUDENT
+    def get(self):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:],["TEACHER"])
+
+            if auth_status == 1:
+                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
+            elif auth_status in [2, 3]:
+                return make_response({"Error" : "Token has Expired"}, 401)
+        else:
+            return make_response({"Error" : "Sign in to continue"}, 401)
+        
+        progresses = Progress.query.all()
+        
+        if len(progresses) > 0:
+
+            if auth_status.get("role") == "STUDENT":
+                my_progresses_dict = [progress.to_dict() for progress in progresses if progress.enrollment.student_id == auth_status.get("public_id")]
+                return make_response(my_progresses_dict,200)
+            elif auth_status.get("role") == "TEACHER":
+                my_progresses_dict = [progress.to_dict() for progress in progresses if progress.enrollment.course.teacher_id == auth_status.get("public_id")]
+                return make_response(my_progresses_dict,200)
+            
+            progresses_dict = [progress.to_dict() for progress in progresses]
+            return make_response(progresses_dict, 200)
+    
+        return make_response({"Error": "No progresses in Database"}, 404)
+    
+    # Create a Progress => ADMIN
+    def post(self):
+        token = request.headers.get("Authorization")
+        progress_details = request.get_json()
+
+        if token:
+            auth_status = authorize(token[7:],["TEACHER", "STUDENT"])
+
+            if auth_status == 1:
+                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
+            elif auth_status in [2, 3]:
+                return make_response({"Error" : "Token has Expired"}, 401)
+        else:
+            return make_response({"Error" : "Sign in to continue"}, 401)
+        
+        if progress_details:
+            try:
+                new_progress = Progress(enrollment_id = progress_details.get("enrollment_id"),
+                                      lesson_id = progress_details.get("lesson_id"),
+                                      )
+                db.session.add(new_progress)
+                db.session.commit()
+            except ValueError:
+                return make_response({"Error" : "Please enter valid Progress details"}, 400)
+            
+        return make_response({"Success" : "Progress Created"}, 200)
+    
+api.add_resource(Progresses, "/progresses", endpoint="progresses")
+
+class ProgressById(Resource):
+
+    # Get a single Progress by Id => ADMIN
+    def get(self, id):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:],["TEACHER", "STUDENT"])
+
+            if auth_status == 1:
+                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
+            elif auth_status in [2, 3]:
+                return make_response({"Error" : "Invalid Token"}, 401)
+        else:
+            return make_response({"Error" : "Sign in to continue"}, 401)
+        
+        progress = Progress.query.filter_by(_id = id).first_or_404(description=f"No Progress with Id: {id}")
+        return make_response(progress.to_dict(), 200)
+    
+    # Update a Progress => ADMIN
+    def patch(self, id):
+        token = request.headers.get("Authorization")
+                
+        if token:
+            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
+
+            if auth_status == 1:
+                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
+            elif auth_status in [2, 3]:
+                return make_response({"Error" : "Token has Expired"}, 401)
+        else:
+            return make_response({"Error" : "Sign in to continue"}, 401)
+
+        progress = Progress.query.filter_by(_id = id).first_or_404(description=f"No progress with Id: {id}")
+        progress_data = request.get_json()
+        
+        try:
+            for key, value in progress_data.items():
+                if hasattr(progress, key):
+                    setattr(progress, key, value)
+                    db.session.commit()
+            return make_response(progress.to_dict(), 200)
+        except ValueError as e:
+            db.session.rollback()
+            return make_response({"Error": f"{e}"}, 500)
+
+    # Delete a Progress => ADMIN
+    def delete(self, id):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
+
+            if auth_status == 1:
+                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
+            elif auth_status in [2, 3]:
+                return make_response({"Error" : "Invalid Token"}, 401)
+        else:
+            return make_response({"Error" : "Sign in to continue"}, 401)
+
+        progress = Progress.query.filter_by(_id = id).first_or_404(description=f"No progress with Id: {id}")
+        db.session.delete(progress)
+        db.session.commit()
+        return make_response({"Success": "Progress deleted successfully"}, 200)
+        
+api.add_resource(ProgressById, "/progresses/<int:id>", endpoint="progress_by_id")
     
 if __name__ == '__main__':
     app.run(port=5555, debug=True)

@@ -1,15 +1,8 @@
 from sqlalchemy_serializer import SerializerMixin
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.ext.associationproxy import association_proxy
 
-from config import db, metadata, flask_bcrypt
-
-# Enrollment Association Table
-enrollments = db.Table(
-    "enrollments",
-    metadata,
-    db.Column("student_id", db.Integer, db.ForeignKey("users.public_id"), primary_key=True),
-    db.Column("course_id", db.Integer, db.ForeignKey("courses._id"), primary_key=True)
-)
+from config import db, flask_bcrypt
 
 # User Table
 class User(db.Model, SerializerMixin):
@@ -24,11 +17,12 @@ class User(db.Model, SerializerMixin):
     created_at = db.Column(db.String, nullable = False)
 
     # Relationships
-    courses = db.relationship("Course", secondary = enrollments, back_populates="students")
-    certificates = db.relationship("Certificate", back_populates="student", cascade="all, delete-orphan")
+    enrollments = db.relationship("Enrollment", back_populates="student", cascade="all,delete-orphan")
+    courses = association_proxy("enrollments", "course", creator=lambda course_obj: Enrollment(course=course_obj))
+    certificates = association_proxy("enrollments", "certificate", creator=lambda certificate_obj : Certificate(certificate=certificate_obj))
 
     # Serialization rules
-    serialize_rules = ('-courses.students', '-courses.certificates','-certificates.student', '-certificates.course', '-_password_hash')
+    serialize_rules = ('-_password_hash', '-enrollments.student', '-courses.enrollments', '-courses.students', '-courses.certificates', '-courses.lessons', '-certificates.enrollment', '-certificates.course')
 
     def __repr__(self):
         return f'<User {self._id}, Name: {self.name}, Role: {self.role}>'
@@ -46,6 +40,28 @@ class User(db.Model, SerializerMixin):
 
     def authenticate_user(self, password):
         return flask_bcrypt.check_password_hash(self._password_hash, password.encode("utf-8"))
+    
+# Enrollment Table
+class Enrollment(db.Model, SerializerMixin):
+    __tablename__ = 'enrollments'
+
+    _id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('users.public_id'), nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('courses._id'), nullable=False)
+    enrolled_on = db.Column(db.String, nullable=False)
+    completion_percentage = db.Column(db.Float,nullable=False)
+
+    # Relationships
+    student = db.relationship('User', back_populates="enrollments")
+    course = db.relationship('Course', back_populates="enrollments")
+    certificate = db.relationship('Certificate', uselist=False, back_populates='enrollment', cascade="all, delete-orphan")
+    progresses = db.relationship("Progress", back_populates="enrollment", cascade="all, delete-orphan")
+
+    # Serialize Rules
+    serialize_rules = ('-student', '-course.enrollments', '-course.students', '-course.certificates', '-certificate.enrollment', '-progresses.enrollment, -progresses.lessons')
+
+    def __repr__(self):
+        return f"<Enrollment: {self._id}, Student: {self.student}, Course: {self.course}>"
 
 #Course Table
 class Course(db.Model, SerializerMixin):
@@ -60,12 +76,13 @@ class Course(db.Model, SerializerMixin):
     created_at = db.Column(db.String, nullable=False)
 
     # Relationships
-    students = db.relationship('User', secondary = enrollments, back_populates='courses')
-    certificates = db.relationship('Certificate', back_populates='course', cascade='all, delete-orphan')
+    enrollments = db.relationship("Enrollment", back_populates="course", cascade="all,delete-orphan")
+    students = association_proxy("enrollments", "user", creator=lambda user_obj: Enrollment(user=user_obj))
+    certificates = association_proxy('enrollments', "certificate", creator=lambda certificate_obj: Certificate(certificate=certificate_obj))
     lessons = db.relationship("Lesson", back_populates="course", cascade="all, delete-orphan")
 
     # Serialization rules
-    serialize_rules = ('-students.courses', '-certificates.course', '-lessons.course')
+    serialize_rules = ('-enrollments.student' ,'-enrollments.course', '-enrollments.certificate', '-enrollments.progresses', '-students.enrollments', '-students.courses', '-students.certificates', '-certificates', '-lessons.course', '-lessons.progresses')
 
     def __repr__(self):
         return f"<Course {self.title}>"
@@ -75,19 +92,18 @@ class Certificate(db.Model, SerializerMixin):
     __tablename__ = "certificates"
 
     _id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey("users.public_id"), nullable=False)
-    course_id = db.Column(db.Integer, db.ForeignKey("courses._id"), nullable=False)
+    enrollment_id = db.Column(db.Integer, db.ForeignKey("enrollments._id"), nullable=False)
     issued_on = db.Column(db.String, nullable=False) 
     
     # Relationships
-    student = db.relationship("User", back_populates="certificates")
-    course = db.relationship("Course", back_populates="certificates")
+    enrollment = db.relationship("Enrollment", back_populates="certificate")
+    course = association_proxy('enrollment', 'course', creator=lambda course_obj: Course(course=course_obj))
 
     # Serialization rules
-    serialize_rules = ("-student.certificates", "-student.courses", "-student.email", "-course.certificates", "-course.students")
+    serialize_rules = ('-enrollment.certificate', '-enrollment.progresses')
 
     def __repr__(self):
-        return f"<Certificate Student: {self.student_id}, Course: {self.course_id}, Issued: {self.issued_at}>"
+        return f"<Certificate: {self._id}, Student: {self.enrollment.student.name}, Course: {self.enrollment.course.title}>"
     
 # Lesson Table
 class Lesson(db.Model, SerializerMixin):
@@ -103,9 +119,34 @@ class Lesson(db.Model, SerializerMixin):
 
     # Relationships
     course = db.relationship("Course", back_populates="lessons")
+    progresses = db.relationship("Progress", back_populates="lesson", cascade="all, delete-orphan")
 
     # Serialization rules
-    serialize_rules = ("-course.lessons",)
+    serialize_rules = ('-course.enrollments', '-course.students', '-course.certificates','-course.lessons', '-progresses.lesson')
 
     def __repr__(self):
-        return f"<Lesson {self.title}, Course ID: {self.course_id}>"
+        return f"<Lesson {self.title}, Course: {self.course.title}>"
+    
+# Progress Table
+class Progress(db.Model, SerializerMixin):
+    __tablename__ = "progresses"
+
+    _id = db.Column(db.Integer, primary_key=True)
+    enrollment_id = db.Column(db.Integer, db.ForeignKey("enrollments._id"))
+    lesson_id = db.Column(db.Integer, db.ForeignKey("lessons._id"))
+    video_watched = db.Column(db.Boolean, default=False)
+    resource_viewed = db.Column(db.Boolean, default=False)
+    quiz_completed = db.Column(db.Boolean, default=False)
+    completed_on = db.Column(db.String, nullable=True)
+
+    # Relationship
+    enrollment = db.relationship("Enrollment", back_populates="progresses")
+    lesson = db.relationship("Lesson", back_populates="progresses")
+
+    # Serialization rules
+    serialize_rules = ('-enrollment.certificate', '-enrollment.progresses', '-lesson.course','-lesson.progresses')
+
+    def __repr__(self):
+        return f"<Progress: {self._id}, Student: {self.enrollment.student.name}, Course: {self.enollment.course.title}, Lesson: {self.lesson._id}"
+
+
