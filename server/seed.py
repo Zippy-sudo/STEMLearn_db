@@ -1,7 +1,7 @@
 from app import app
 from uuid import uuid4
 from datetime import datetime, timezone
-from models import db, User, Course, Certificate, Lesson, enrollments
+from models import db, User, Course, Certificate, Lesson, Quiz, enrollments
 
 with app.app_context():
 
@@ -11,6 +11,7 @@ with app.app_context():
     Course.query.delete()
     Certificate.query.delete() 
     Lesson.query.delete()
+    Quiz.query.delete()
 
     print("Generating Users...")
 
@@ -141,6 +142,56 @@ with app.app_context():
 
     db.session.add_all([Lesson1, Lesson2, Lesson3, Lesson4])
     db.session.commit()
+    
+    print("Generating Quizzes...")
+
+    quizzes = [
+        Quiz(
+            lesson_id=Lesson1._id,
+            student_id=User3.public_id,
+            question="What does CRUD stand for?",
+            options=["Create, Read, Update, Delete", "Copy, Retrieve, Update, Destroy"],
+            correct_answer="Create, Read, Update, Delete",
+            attempts=0,
+            created_at=datetime.now().strftime("%d/%m/%Y")
+        ),
+        Quiz(
+            lesson_id=Lesson1._id,
+            student_id=User3.public_id,
+            question="Which HTTP method is used for the 'Create' operation in RESTful APIs?",
+            options=["GET", "POST", "PUT", "DELETE"],
+            correct_answer="POST",
+            attempts=0,
+            created_at=datetime.now().strftime("%d/%m/%Y")
+        ),
+        Quiz(
+            lesson_id=Lesson2._id,
+            student_id=User3.public_id,
+            question="Which SQL command is used for the 'Read' operation?",
+            options=["SELECT", "INSERT", "UPDATE", "DELETE"],
+            correct_answer="SELECT",
+            attempts=0,
+            created_at=datetime.now().strftime("%d/%m/%Y")
+        ),
+        Quiz(
+            lesson_id=Lesson4._id,
+            student_id=User5.public_id,
+            question="What is the purpose of the 'Delete' operation in CRUD?",
+            options=[
+                "To add new data to the database",
+                "To retrieve data from the database",
+                "To modify existing data in the database",
+                "To remove data from the database"
+            ],
+            correct_answer="To remove data from the database",
+            attempts=0,
+            created_at=datetime.now().strftime("%d/%m/%Y")
+        )
+    ]
+
+    db.session.add_all(quizzes)
+    db.session.commit()
+    
     print("Generating Certificates...")
 
     certificates = [
