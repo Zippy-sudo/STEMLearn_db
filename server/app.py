@@ -14,6 +14,8 @@ from models import User, Enrollment, Course, Certificate, Progress
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 
+from jwt import ExpiredSignatureError, InvalidTokenError
+
 # Params are:
 #     Token => JWT
 #     Disallowed_Users => an array of who  NOT  to let access the route e.g ["Teacher","Student"]
@@ -26,18 +28,16 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 def authorize(token,disallowed_users):
     try:
         identity = jwt.decode(token, SECRET_KEY, algorithms="HS256")
-        current_user = User.query.filter_by(public_id = identity.get("public_id")).first()
-        if current_user and current_user.role in disallowed_users:
-            status = 1
-            return status
-        elif not current_user:
-            status = 2
-            return status
-        status = {"role" : current_user.role, "public_id" : identity.get("public_id")}
-        return status
-    except jwt.ExpiredSignatureError:
-        status = 3
-        return status
+        current_user = User.query.filter_by(public_id=identity.get("public_id")).first()
+        if not current_user:
+            return 2
+        if current_user.role in disallowed_users:
+            return 1
+        return {"role": current_user.role, "public_id": identity.get("public_id")}
+    except ExpiredSignatureError:
+        return 3
+    except InvalidTokenError:
+        return 4
 
 # Root
 @app.route("/", methods=["GET"])
@@ -59,6 +59,7 @@ def login():
     elif user and user.authenticate_user(user_details.get("password")):
         token = jwt.encode({"public_id" : user.public_id, "exp" : (datetime.now(timezone.utc) + timedelta(hours=1))}, SECRET_KEY, algorithm="HS256")
         return make_response({"Token" : f"{token}", "Role": f"{user.role}"}, 200)
+
     
 # Logout
 @app.route("/logout", methods=["GET"])
@@ -529,7 +530,6 @@ class CertificateById(Resource):
 api.add_resource(CertificateById, "/certificates/<int:id>", endpoint="certificate_by_id")
 
 
-
 # Progresses
 class Progresses(Resource):
 
@@ -658,6 +658,98 @@ class ProgressById(Resource):
         return make_response({"Success": "Progress deleted successfully"}, 200)
         
 api.add_resource(ProgressById, "/progresses/<int:id>", endpoint="progress_by_id")
+
+
+class Lessons(Resource):
+    # Get all lessons => ADMIN, TEACHER, STUDENT
+    def get(self):
+        token = request.cookies.get("jwtToken")
+
+        if not token or authorize(token, []) in [1, 2, 3]:
+            return make_response({"error": "Unauthorized or token expired"}, 401)
+
+        lessons = Lesson.query.all()
+        return make_response([lesson.to_dict() for lesson in lessons], 200) if lessons else make_response({"error": "No lessons found"}, 404)
+
+    # Create a lesson => ADMIN
+    def post(self):
+        token = request.cookies.get("jwtToken")
+
+        if not token or authorize(token, ["ADMIN"]) in [1, 2, 3]:
+            return make_response({"error": "Unauthorized or token expired"}, 401)
+
+        lesson_data = request.get_json()
+        if not lesson_data:
+            return make_response({"error": "Invalid data"}, 400)
+
+        # Ensure course exists before adding a lesson
+        course = Course.query.filter_by(_id=lesson_data.get("course_id")).first()
+        if not course:
+            return make_response({"error": "Course not found"}, 404)
+
+        try:
+            new_lesson = Lesson(
+                title=lesson_data.get("title"),
+                content=lesson_data.get("content"),
+                video_url=lesson_data.get("video_url"),
+                resources=lesson_data.get("resources"),
+                course_id=lesson_data.get("course_id"),
+                created_at=datetime.now().strftime("%d/%m/%Y"),
+            )
+            db.session.add(new_lesson)
+            db.session.commit()
+            return make_response(new_lesson.to_dict(), 201)
+        except ValueError as e:
+            db.session.rollback()
+            return make_response({"error": str(e)}, 500)
+
+
+class LessonById(Resource):
+    # Get a lesson => ADMIN, TEACHER, STUDENT
+    def get(self, id):
+        token = request.cookies.get("jwtToken")
+
+        if not token or authorize(token, []) in [1, 2, 3]:
+            return make_response({"error": "Unauthorized or token expired"}, 401)
+
+        lesson = Lesson.query.filter_by(_id=id).first_or_404(description=f"No lesson found with ID {id}")
+        return make_response(lesson.to_dict(), 200)
+
+    # Update a lesson => ADMIN, TEACHER
+    def patch(self, id):
+        token = request.cookies.get("jwtToken")
+
+        if not token or authorize(token, ["ADMIN", "TEACHER"]) in [1, 2, 3]:
+            return make_response({"error": "Unauthorized or token expired"}, 401)
+
+        lesson = Lesson.query.filter_by(_id=id).first_or_404(description=f"No lesson found with ID {id}")
+        lesson_data = request.get_json()
+
+        try:
+            for key, value in lesson_data.items():
+                if hasattr(lesson, key):
+                    setattr(lesson, key, value)
+            db.session.commit()
+            return make_response(lesson.to_dict(), 200)
+        except ValueError as e:
+            db.session.rollback()
+            return make_response({"error": str(e)}, 500)
+
+    # Delete a lesson => ADMIN
+    def delete(self, id):
+        token = request.cookies.get("jwtToken")
+
+        if not token or authorize(token, ["ADMIN"]) in [1, 2, 3]:
+            return make_response({"error": "Unauthorized or token expired"}, 401)
+
+        lesson = Lesson.query.filter_by(_id=id).first_or_404(description=f"No lesson found with ID {id}")
+        db.session.delete(lesson)
+        db.session.commit()
+        return make_response({"success": f"Lesson {id} deleted"}, 200)
+    
+api.add_resource(Lessons, "/lessons", endpoint="lessons")
+api.add_resource(LessonById, "/lessons/<int:id>", endpoint="lesson_by_id")
+    
     
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
