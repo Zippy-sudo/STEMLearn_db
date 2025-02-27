@@ -9,6 +9,7 @@ from flask_bcrypt import Bcrypt
 from sqlalchemy import MetaData
 
 app = Flask(__name__)
+CORS(app, origins="http://localhost:3000", supports_credentials=True)
 flask_bcrypt = Bcrypt(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -23,5 +24,3 @@ migrate = Migrate(app, db)
 db.init_app(app)
 
 api = Api(app)
-
-CORS(app)
