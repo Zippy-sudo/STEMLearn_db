@@ -121,7 +121,6 @@ class Lesson(db.Model, SerializerMixin):
     title = db.Column(db.String, nullable=False)
     content = db.Column(db.Text, nullable=False)
     video_url = db.Column(db.String, nullable=True)
-    resources = db.Column(db.JSON, nullable=True)
     course_id = db.Column(db.Integer, db.ForeignKey("courses._id"), nullable=False)
     created_at = db.Column(db.String, nullable=False)
 
@@ -129,9 +128,11 @@ class Lesson(db.Model, SerializerMixin):
     course = db.relationship("Course", back_populates="lessons")
     quizzes = db.relationship("Quiz", back_populates="lesson", cascade="all, delete-orphan")
     progresses = db.relationship("Progress", back_populates="lesson", cascade="all, delete-orphan")
+    
+    resources = db.relationship("Resource", back_populates="lesson", cascade="all, delete-orphan")
 
     # Serialization rules
-    serialize_rules = ('-course.enrollments', '-course.students', '-course.certificates','-course.lessons', '-progresses.lesson', '-quizzes.lesson', '-quizzes.student')
+    serialize_rules = ('-course.enrollments', '-course.students', '-course.certificates','-course.lessons', '-progresses.lesson', '-quizzes.lesson', '-quizzes.student', '-resources.lesson')
 
     def __repr__(self):
         return f"<Lesson {self.title}, Course: {self.course.title}>"
