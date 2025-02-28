@@ -23,16 +23,18 @@ from jwt import ExpiredSignatureError, InvalidTokenError
 #     {"role": "role",
 #       "public_id" : "public_id"
 #     } => Dictionary with user role and public_id  ONLY IF  authentication is successful
-#     1 => Logged in User is not allowed to access the route
-#     2 => Token has expired
+#     1 => No user with given public id
+#     2 => Logged in User is not allowed to access the route
+#     3 => Token has expired
+#     4 => Token invalid
 def authorize(token,disallowed_users):
     try:
         identity = jwt.decode(token, SECRET_KEY, algorithms="HS256")
         current_user = User.query.filter_by(public_id=identity.get("public_id")).first()
         if not current_user:
-            return 2
-        if current_user.role in disallowed_users:
             return 1
+        if current_user.role in disallowed_users:
+            return 2
         return {"role": current_user.role, "public_id": identity.get("public_id")}
     except ExpiredSignatureError:
         return 3
