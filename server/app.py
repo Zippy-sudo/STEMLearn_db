@@ -9,7 +9,7 @@ from flask import request, jsonify, make_response
 from flask_restful import Resource
 
 from config import app, db, api
-from models import User, Enrollment, Course, Certificate, Progress
+from models import User, Enrollment, Course, Lesson, Certificate, Progress, Activity
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -243,6 +243,133 @@ class UserById(Resource):
 
 api.add_resource(UserById, "/users/<string:id>", endpoint="user_by_id")
 
+
+# Enrollments
+class Enrollments(Resource):
+
+    # Get all Enrollments => ADMIN,TEACHER
+    def get(self):
+        token = request.headers.get("Authorization")
+        
+        if token:
+                auth_status = authorize(token[7:],["STUDENT"])
+            
+                if auth_status == 1:
+                    return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
+                elif auth_status in [2, 3, 4]:
+                    return make_response({"Error" : "Invalid Token"}, 401)
+        else:
+            return make_response({"Error" : "Sign in to continue"}, 401)
+
+        enrollments = Enrollment.query.all()
+
+        if len(enrollments) > 0:
+            enrollments_dict = [enrollment.to_dict() for enrollment in enrollments]
+            return make_response(enrollments_dict, 200)
+        else:
+            return make_response({"Error": "No users in Database"}, 404)
+
+    # Create an Enrollment => ADMIN,STUDENT
+    def post(self):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:],["STUDENT", "TEACHER"])
+            
+            if auth_status == 1:
+                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
+            elif auth_status in [2, 3, 4]:
+                return make_response({"Error" : "Invalid Token"}, 401)
+        else:
+            return make_response({"Error" : "Sign in to continue"},401)
+
+        new_enrollment_data = request.get_json()
+
+        if not new_enrollment_data:
+            return make_response({"Error": "Invalid data"}, 400)
+        else:
+            try:
+                new_enrollment = Enrollment(student_id= new_enrollment_data.get("student_id"),
+                            course_id = new_enrollment_data.get("course_id"),
+                            enrolled_on = (datetime.now(timezone.utc)).strftime("%d/%m/%Y"),
+                            completion_percentage = float(new_enrollment_data.get("completion_percentage")) if new_enrollment_data.get("completion_percentage") else float(0)
+                            )
+                db.session.add(new_enrollment)
+                db.session.commit()
+                return make_response(new_enrollment.to_dict(), 201)
+            except ValueError as e:
+                db.session.rollback()
+                return make_response({"Error": f"{e}"}, 500)
+
+api.add_resource(Enrollments , "/enrollments", endpoint="enrollments")
+        
+class EnrollmentById(Resource):
+
+    # Get a single Enrollment by ID => ADMIN, TEACHER
+    def get(self, id):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:],["STUDENT"])
+
+            if auth_status == 1:
+                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
+            elif auth_status in [2, 3, 4]:
+                return make_response({"Error" : "Invalid Token"}, 401)
+        else:
+            return make_response({"Error" : "Sign in to continue"}, 401)
+
+        enrollment = Enrollment.query.filter_by(_id = id).first_or_404(description=f"No enrollment with Id: {id}")
+
+        return make_response(enrollment.to_dict(), 200)
+
+    # Update an Enrollment => ADMIN
+    def patch(self, id):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
+
+            if auth_status == 1:
+                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
+            elif auth_status in [2, 3, 4]:
+                return make_response({"Error" : "Invalid Token"}, 401)
+        else:
+            return make_response({"Error" : "Sign in to continue"}, 401)
+
+        enrollment = Enrollment.query.filter_by(_id = id).first_or_404(description=f"No enrollment with Id: {id}")
+        enrollment_data = request.get_json()
+        
+        try:
+            for key, value in enrollment_data.items():
+                if hasattr(enrollment, key):
+                    setattr(enrollment, key, value)
+                    db.session.commit()
+            return make_response(enrollment.to_dict(), 200)
+        except ValueError as e:
+            db.session.rollback()
+            return make_response({"Error": f"{e}"}, 500)
+
+    # Delete an Enrollment => ADMIN
+    def delete(self, id):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
+
+            if auth_status == 1:
+                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
+            elif auth_status in [2, 3, 4]:
+                return make_response({"Error" : "Invalid Token"}, 401)
+        else:
+            return make_response({"Error" : "Sign in to continue"}, 401)
+
+        enrollment = Enrollment.query.filter_by(_id = id).first_or_404(description=f"No enrollment with Id: {id}")
+        db.session.delete(enrollment)
+        db.session.commit()
+        return make_response({"Success": "Enrollment deleted successfully"}, 200)
+
+api.add_resource(EnrollmentById, "/enrollments/<int:id>", endpoint="enrollments_by_id")
 
 
 # Courses
@@ -752,6 +879,8 @@ class LessonById(Resource):
 api.add_resource(Lessons, "/lessons", endpoint="lessons")
 api.add_resource(LessonById, "/lessons/<int:id>", endpoint="lesson_by_id")
 
+
+# Quizzes
 class Quizzes(Resource):
     # Get all quizzes => ADMIN, TEACHER, STUDENT
     def get(self):
