@@ -83,9 +83,11 @@ class Course(db.Model, SerializerMixin):
     students = association_proxy("enrollments", "user", creator=lambda user_obj: Enrollment(user=user_obj))
     certificates = association_proxy('enrollments', "certificate", creator=lambda certificate_obj: Certificate(certificate=certificate_obj))
     lessons = db.relationship("Lesson", back_populates="course", cascade="all, delete-orphan")
+    
+    teacher = db.relationship('User', back_populates='courses_taught')
 
     # Serialization rules
-    serialize_rules = ('-enrollments.student' ,'-enrollments.course', '-enrollments.certificate', '-enrollments.progresses', '-students.enrollments', '-students.courses', '-students.certificates', '-certificates', '-lessons.course', '-lessons.progresses')
+    serialize_rules = ('-enrollments.student' ,'-enrollments.course', '-enrollments.certificate', '-enrollments.progresses', '-students.enrollments', '-students.courses', '-students.certificates', '-certificates', '-lessons.course', '-lessons.progresses', '-teacher.courses_taught')
 
     def __repr__(self):
         return f"<Course {self.title}>"
