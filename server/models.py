@@ -180,4 +180,23 @@ class Quiz(db.Model, SerializerMixin):
 
     def __repr__(self):
         return f"<Lesson {self.title}, Course ID: {self.course_id}>"
+    
+# Resource Table
+class Resource(db.Model, SerializerMixin):
+    __tablename__ = "resources"
+
+    _id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey("lessons._id"), nullable=False)
+    title = db.Column(db.String, nullable=False)
+    file_url = db.Column(db.String, nullable=False)
+   
+
+    # Relationships
+    lesson = db.relationship("Lesson", back_populates="resources")
+
+    # Serialization rules
+    serialize_rules = ('-lesson.resources',)
+
+    def __repr__(self):
+        return f"<Resource {self._id}, Title: {self.title}, Lesson ID: {self.lesson_id}>"
 
