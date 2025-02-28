@@ -19,15 +19,13 @@ class User(db.Model, SerializerMixin):
     # Relationships
     enrollments = db.relationship("Enrollment", back_populates="student", cascade="all,delete-orphan")
     courses = association_proxy("enrollments", "course", creator=lambda course_obj: Enrollment(course=course_obj))
-    courses_taught = db.relationship("Course", back_populates="teacher", cascade="all, delete-orphan")
+    courses_taught = db.relationship("Course", back_populates="teacher")
     certificates = association_proxy("enrollments", "certificate", creator=lambda certificate_obj : Certificate(certificate=certificate_obj))
     quizzes = db.relationship("Quiz", back_populates="student", cascade="all, delete-orphan")
-    
-    courses_taught = db.relationship('Course', back_populates='teacher')
-
+    activities = db.relationship("Activity", back_populates="user", cascade="all, delete-orphan")
     
     # Serialization rules
-    serialize_rules = ('-_password_hash', '-enrollments.student', '-courses.enrollments', '-courses.students', '-courses.certificates', '-courses.lessons', '-certificates.enrollment', '-certificates.course', '-quizzes.student', '-quizzes.lesson', '-courses_taught.enrollments','-courses_taught.certificates', '-courses_taught.lessons', '-courses_taught.teacher', "-courses_taught.students")
+    serialize_rules = ('-_password_hash', '-enrollments.student', '-courses.enrollments', '-courses.students', '-courses.certificates', '-courses.lessons', '-certificates.enrollment', '-certificates.course', '-quizzes.student', '-quizzes.lesson', '-courses_taught.enrollments','-courses_taught.certificates', '-courses_taught.lessons', '-courses_taught.teacher', "-courses_taught.students", '-activities')
 
     def __repr__(self):
         return f'<User {self._id}, Name: {self.name}, Role: {self.role}>'
@@ -158,7 +156,7 @@ class Progress(db.Model, SerializerMixin):
     def __repr__(self):
         return f"<Progress: {self._id}, Student: {self.enrollment.student.name}, Course: {self.enollment.course.title}, Lesson: {self.lesson._id}"
     
-
+# Quiz Table
 class Quiz(db.Model, SerializerMixin):
     __tablename__ = "quizzes"
 
@@ -181,3 +179,17 @@ class Quiz(db.Model, SerializerMixin):
     def __repr__(self):
         return f"<Lesson {self.title}, Course ID: {self.course_id}>"
 
+# Activity Table
+class Activity(db.Model, SerializerMixin):
+    __tablename__ = "activities"
+
+    _id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.public_id"), nullable=False)
+    action = db.Column(db.String, nullable=False)
+    timestamp = db.Column(db.String, nullable=False)
+
+    # Relationships
+    user = db.relationship("User", back_populates="activities")
+
+    def __repr__(self):
+        return f"<Activity: {self.action} on {self.timestamp.split()[0]} at {self.timestamp.split()[1]}"
