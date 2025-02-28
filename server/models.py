@@ -21,6 +21,8 @@ class User(db.Model, SerializerMixin):
     courses = association_proxy("enrollments", "course", creator=lambda course_obj: Enrollment(course=course_obj))
     certificates = association_proxy("enrollments", "certificate", creator=lambda certificate_obj : Certificate(certificate=certificate_obj))
     quizzes = db.relationship("Quiz", back_populates="student", cascade="all, delete-orphan")
+    
+    courses_taught = db.relationship('Course', back_populates='teacher')
 
     
     # Serialization rules
