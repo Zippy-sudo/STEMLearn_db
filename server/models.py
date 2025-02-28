@@ -90,7 +90,7 @@ class Course(db.Model, SerializerMixin):
     teacher = db.relationship('User', back_populates='courses_taught')
 
     # Serialization rules
-    serialize_rules = ('-enrollments.student' ,'-enrollments.course', '-enrollments.certificate', '-enrollments.progresses', '-students.enrollments', '-students.courses', '-students.certificates', '-certificates', '-lessons.course', '-lessons.progresses', '-teacher.courses_taught')
+    serialize_rules = ('-enrollments.student' ,'-enrollments.course', '-enrollments.certificate', '-enrollments.progresses', '-students.enrollments', '-students.courses', '-students.certificates', '-certificates', '-lessons.course', '-lessons.progresses', '-teacher.courses', '-teacher.certificates', '-teacher.enrollments')
 
     def __repr__(self):
         return f"<Course {self.title}>"
