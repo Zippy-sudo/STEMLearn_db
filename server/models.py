@@ -178,7 +178,7 @@ class Quiz(db.Model, SerializerMixin):
     serialize_rules = ('-lesson.quizzes', '-student.quizzes')
 
     def __repr__(self):
-        return f"<Lesson {self.title}, Course ID: {self.course_id}>"
+        return f"<Lesson {self.title}, Lesson: {self.lesson.title}>"
     
 # Resource Table
 class Resource(db.Model, SerializerMixin):

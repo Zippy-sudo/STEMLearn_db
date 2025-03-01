@@ -2,7 +2,7 @@ from app import app
 from uuid import uuid4
 from datetime import datetime, timezone
 
-from models import db, User, Enrollment, Course, Certificate, Lesson, Quiz, Progress, Resource
+from models import db, User, Enrollment, Course, Certificate, Lesson, Quiz, Progress, Activity, Resource
 
 with app.app_context():
 
@@ -14,6 +14,7 @@ with app.app_context():
     Lesson.query.delete()
     Progress.query.delete()
     Quiz.query.delete()
+    Activity.query.delete()
     Resource.query.delete()
 
     print("Generating Users...")
@@ -67,8 +68,10 @@ with app.app_context():
                 role = "TEACHER",
                 created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                 )
+    
+    Activity1 = Activity(user_id=User1.public_id,action="Creating Students", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
 
-    db.session.add_all([User1, User2, User3, User4, User5, User6, User7])
+    db.session.add_all([User1, User2, User3, User4, User5, User6, User7, Activity1])
     db.session.commit()
 
     print("Generating Courses...")
@@ -93,7 +96,9 @@ with app.app_context():
                      created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                      )
     
-    db.session.add_all([Course1, Course2, Course3])
+    Activity2 = Activity(user_id=User1.public_id,action="Creating Courses", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+    
+    db.session.add_all([Course1, Course2, Course3, Activity2])
     db.session.commit()
 
     print("Assigning Users to Courses...")
@@ -129,7 +134,9 @@ with app.app_context():
                              completion_percentage= float(70) 
                              )
     
-    db.session.add_all([Enrollment1, Enrollment2, Enrollment3, Enrollment4, Enrollment5, Enrollment6])
+    Activity3 = Activity(user_id=User1.public_id,action="Enrolling Students", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+    
+    db.session.add_all([Enrollment1, Enrollment2, Enrollment3, Enrollment4, Enrollment5, Enrollment6, Activity3])
     db.session.commit()
     
     print("Generating Lessons...")
@@ -164,6 +171,10 @@ with app.app_context():
         created_at=datetime.now().strftime("%d/%m/%Y")
     )
 
+
+    Activity4 = Activity(user_id=User2.public_id,action="Creating Lessons", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+    db.session.add_all([Lesson1, Lesson2, Lesson3, Lesson4, Activity4])
+    
     # Create Resources for Lessons
     Resource1 = Resource(
         title="Slides",
@@ -212,7 +223,7 @@ with app.app_context():
     Lesson3.resources = [Resource5, Resource6]
     Lesson4.resources = [Resource7, Resource8]
 
-    db.session.add_all([Lesson1, Lesson2, Lesson3, Lesson4, Resource1, Resource2, Resource3, Resource4, Resource5, Resource6, Resource7, Resource8])
+    db.session.add_all([Lesson1, Lesson2, Lesson3, Lesson4, Resource1, Resource2, Resource3, Resource4, Resource5, Resource6, Resource7, Resource8, Activity4])
     db.session.commit()
     
     print("Generating Quizzes...")
@@ -261,14 +272,19 @@ with app.app_context():
         )
     ]
 
+    Activity5 = Activity(user_id=User1.public_id,action="Creating Quizzes", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+
     db.session.add_all(quizzes)
+    db.session.add(Activity5)
     db.session.commit()
     
     print("Generating Certificates...")
 
     Certificate1 = Certificate(enrollment_id=Enrollment5._id, issued_on=datetime.now(timezone.utc).strftime("%d/%m/%Y"))
 
-    db.session.add(Certificate1)
+    Activity6 = Activity(user_id=User1.public_id,action="Awarding Certificates", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+
+    db.session.add_all([Certificate1, Activity6])
     db.session.commit()
 
     print("Generating Progresses...")
@@ -280,6 +296,12 @@ with app.app_context():
     Progress5 = Progress(enrollment_id=Enrollment5._id, lesson_id=Lesson3._id)
 
     db.session.add_all([Progress1, Progress2, Progress3, Progress4, Progress5])
+    db.session.commit()
+
+    Activity7 = Activity(user_id=User6.public_id, action="Logging In", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+    Activity8 = Activity(user_id=User3.public_id, action="Logging In", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+
+    db.session.add_all([Activity7,Activity8])
     db.session.commit()
 
     print("All Good.")

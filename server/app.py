@@ -2,19 +2,18 @@
 
 import os
 import jwt
+from jwt import ExpiredSignatureError, InvalidTokenError
 from uuid import uuid4
 from dotenv import load_dotenv
 from datetime import datetime, timezone, timedelta
-from flask import request, jsonify, make_response
+from flask import request,jsonify, make_response
 from flask_restful import Resource
 
 from config import app, db, api
-from models import User, Enrollment, Course, Lesson, Certificate, Progress, Activity
+from models import User, Enrollment, Course, Lesson, Quiz, Certificate, Progress, Activity
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
-
-from jwt import ExpiredSignatureError, InvalidTokenError
 
 # Params are:
 #     Token => JWT
@@ -27,19 +26,39 @@ from jwt import ExpiredSignatureError, InvalidTokenError
 #     2 => Logged in User is not allowed to access the route
 #     3 => Token has expired
 #     4 => Token invalid
-def authorize(token,disallowed_users):
+def authorize(token):
     try:
         identity = jwt.decode(token, SECRET_KEY, algorithms="HS256")
         current_user = User.query.filter_by(public_id=identity.get("public_id")).first()
         if not current_user:
             return 1
-        if current_user.role in disallowed_users:
-            return 2
-        return {"role": current_user.role, "public_id": identity.get("public_id")}
     except ExpiredSignatureError:
-        return 3
+        return 2
     except InvalidTokenError:
+        return 3
+    except Exception:
         return 4
+
+@app.before_request
+def check_auth():
+
+    if request.path not in ["/", "/login", "/logout", "/signup", "/unauthCourses"]:
+        token = request.headers.get("Authorization")[7:]
+        auth_status = authorize(token)
+
+        if auth_status in [1,2,3,4]:
+            return make_response({"Error" : "Invalid Token"}, 400)
+        
+    return None
+    
+def get_user(token, disallowed_users):
+    identity = jwt.decode(jwt = token, key = SECRET_KEY, algorithms="HS256")
+    current_user = User.query.filter_by(public_id=identity.get("public_id")).first()
+    if current_user.role in disallowed_users:
+        return None
+    return {"role": current_user.role, "public_id": identity.get("public_id")}
+
+
 
 # Root
 @app.route("/", methods=["GET"])
@@ -61,14 +80,12 @@ def login():
     elif user and user.authenticate_user(user_details.get("password")):
         token = jwt.encode({"public_id" : user.public_id, "exp" : (datetime.now(timezone.utc) + timedelta(hours=1))}, SECRET_KEY, algorithm="HS256")
         return make_response({"Token" : f"{token}", "Role": f"{user.role}"}, 200)
-
-    
+ 
 # Logout
 @app.route("/logout", methods=["GET"])
 def logout():
     return make_response({"Success" : "You've been logged out"})
 
-    
 # Signup
 @app.route("/signup", methods=["POST"])
 def signup():
@@ -106,67 +123,54 @@ def get_unauth_courses():
 
 
 
-
 # Users
 class Users(Resource):
 
     # Get all Users => ADMIN,TEACHER
     def get(self):
         token = request.headers.get("Authorization")
-        
-        if token:
-                auth_status = authorize(token[7:],["STUDENT"])
+        auth_status = get_user(token[7:], ["STUDENT"])
             
-                if auth_status == 1:
-                    return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-                elif auth_status in [2, 3]:
-                    return make_response({"Error" : "Token has Expired"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
-
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+        
         users = User.query.all()
-
+            
         if len(users) > 0:
             if (auth_status.get("role") == "TEACHER"):
-                my_students_dict = [user.to_dict(only = ('name')) for user in users for course in user.courses if course.teacher_id == auth_status.get("public_id")]
-                return make_response(my_students_dict, 200)
+                    my_students_dict = [user.to_dict(only = ('name','enrollments')) for user in users for course in user.courses if course.teacher_id == auth_status.get("public_id")]
+                    return make_response(my_students_dict, 200)
             
             users_dict = [user.to_dict() for user in users]
             return make_response(users_dict, 200)
-        else:
-            return make_response({"Error": "No users in Database"}, 404)
+        
+        return make_response({"Error": "No users in Database"}, 404)
 
     # Create a User => ADMIN
     def post(self):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:],["STUDENT", "TEACHER"])
-            
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Token has Expired"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"},401)
-
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+        
         new_user_data = request.get_json()
 
         if not new_user_data:
-            return make_response({"Error": "Invalid data"}, 400)
-        else:
-            try:
-                new_user = User(name = new_user_data.get("name"),
-                            public_id = str(uuid4()),
-                            email = new_user_data.get("email"),
-                            password_hash = new_user_data.get("password"),
-                            role = new_user_data.get("role").upper(),
-                            created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
-                            )
-                db.session.add(new_user)
-                db.session.commit()
-                return make_response(new_user.to_dict(), 201)
-            except ValueError as e:
+            return make_response({"Error": "Please enter user data"}, 400)
+        
+        try:
+            new_user = User(name = new_user_data.get("name"),
+                        public_id = str(uuid4()),
+                        email = new_user_data.get("email"),
+                        password_hash = new_user_data.get("password"),
+                        role = new_user_data.get("role").upper(),
+                        created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
+                        )
+            db.session.add(new_user)
+            db.session.commit()
+            return make_response(new_user.to_dict(), 201)
+        except ValueError as e:
                 db.session.rollback()
                 return make_response({"Error": f"{e}"}, 500)
 
@@ -177,17 +181,11 @@ class UserById(Resource):
     # Get a single User by ID => ADMIN, TEACHER
     def get(self, id):
         token = request.headers.get("Authorization")
-
-        if token:
-            auth_status = authorize(token[7:],["STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Token has Expired"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
-
+        auth_status = get_user(token[7:], ["STUDENT"])
+        
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+            
         user = User.query.filter_by(public_id = id).first_or_404(description=f"No user with Id: {id}")
 
         if auth_status.get("role") == "TEACHER":
@@ -198,17 +196,11 @@ class UserById(Resource):
     # Update a User => ADMIN
     def patch(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["TEACHER","STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Token has Expired"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
-
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+            
         user = User.query.filter_by(public_id = id).first_or_404(description=f"No user with Id: {id}")
         user_data = request.get_json()
         
@@ -225,16 +217,10 @@ class UserById(Resource):
     # Delete a User => ADMIN
     def delete(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["TEACHER","STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Token has Expired"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         user = User.query.filter_by(public_id = id).first_or_404(description=f"No user with Id: {id}")
         db.session.delete(user)
@@ -250,56 +236,45 @@ class Enrollments(Resource):
     # Get all Enrollments => ADMIN,TEACHER
     def get(self):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["STUDENT"])
         
-        if token:
-                auth_status = authorize(token[7:],["STUDENT"])
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
             
-                if auth_status == 1:
-                    return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-                elif auth_status in [2, 3, 4]:
-                    return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
-
         enrollments = Enrollment.query.all()
 
         if len(enrollments) > 0:
             enrollments_dict = [enrollment.to_dict() for enrollment in enrollments]
             return make_response(enrollments_dict, 200)
-        else:
-            return make_response({"Error": "No users in Database"}, 404)
+        
+        return make_response({"Error": "No users in Database"}, 404)
 
     # Create an Enrollment => ADMIN,STUDENT
     def post(self):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER"])
 
-        if token:
-            auth_status = authorize(token[7:],["STUDENT", "TEACHER"])
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
             
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3, 4]:
-                return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"},401)
-
         new_enrollment_data = request.get_json()
 
         if not new_enrollment_data:
-            return make_response({"Error": "Invalid data"}, 400)
-        else:
-            try:
-                new_enrollment = Enrollment(student_id= new_enrollment_data.get("student_id"),
-                            course_id = new_enrollment_data.get("course_id"),
-                            enrolled_on = (datetime.now(timezone.utc)).strftime("%d/%m/%Y"),
-                            completion_percentage = float(new_enrollment_data.get("completion_percentage")) if new_enrollment_data.get("completion_percentage") else float(0)
-                            )
-                db.session.add(new_enrollment)
-                db.session.commit()
-                return make_response(new_enrollment.to_dict(), 201)
-            except ValueError as e:
-                db.session.rollback()
-                return make_response({"Error": f"{e}"}, 500)
+            return make_response({"Error": "Please enter enrollment data"}, 400)
+        
+        try:
+            new_enrollment = Enrollment(student_id= new_enrollment_data.get("student_id"),
+                    course_id = new_enrollment_data.get("course_id"),
+                    enrolled_on = (datetime.now(timezone.utc)).strftime("%d/%m/%Y"),
+                    completion_percentage = float(new_enrollment_data.get("completion_percentage"))
+                    if new_enrollment_data.get("completion_percentage") else float(0)
+                    )
+            db.session.add(new_enrollment)
+            db.session.commit()
+            return make_response(new_enrollment.to_dict(), 201)
+        except ValueError as e:
+            db.session.rollback()
+            return make_response({"Error": f"{e}"}, 500)
 
 api.add_resource(Enrollments , "/enrollments", endpoint="enrollments")
         
@@ -308,16 +283,10 @@ class EnrollmentById(Resource):
     # Get a single Enrollment by ID => ADMIN, TEACHER
     def get(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:],["STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3, 4]:
-                return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         enrollment = Enrollment.query.filter_by(_id = id).first_or_404(description=f"No enrollment with Id: {id}")
 
@@ -326,44 +295,32 @@ class EnrollmentById(Resource):
     # Update an Enrollment => ADMIN
     def patch(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER","STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3, 4]:
-                return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
-
-        enrollment = Enrollment.query.filter_by(_id = id).first_or_404(description=f"No enrollment with Id: {id}")
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+            
+        enrollment = Enrollment.query.first_or_404(description=f"No enrollment with Id {id}")
         enrollment_data = request.get_json()
-        
+
         try:
             for key, value in enrollment_data.items():
                 if hasattr(enrollment, key):
                     setattr(enrollment, key, value)
                     db.session.commit()
             return make_response(enrollment.to_dict(), 200)
-        except ValueError as e:
+        except Exception as e:
             db.session.rollback()
             return make_response({"Error": f"{e}"}, 500)
 
     # Delete an Enrollment => ADMIN
     def delete(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER","STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3, 4]:
-                return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
-
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+            
         enrollment = Enrollment.query.filter_by(_id = id).first_or_404(description=f"No enrollment with Id: {id}")
         db.session.delete(enrollment)
         db.session.commit()
@@ -377,19 +334,12 @@ class Courses(Resource):
     
     # Get all Courses => ADMIN, TEACHER, STUDENT 
     def get(self):
-
         token = request.headers.get('Authorization')
+        auth_status = get_user(token[7:],[])
 
-        if token:
-            auth_status = authorize(token[7:], [])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Token has Expired"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
-
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+            
         courses = Course.query.all()
         
         if len (courses) > 0:
@@ -399,45 +349,39 @@ class Courses(Resource):
             elif auth_status.get("role") == "TEACHER":
                 courses_dict = [course.to_dict() for course in courses if course.teacher_id == auth_status.get("public_id")]
                 return make_response(courses_dict, 200)
-            
+        
             courses_dict = [course.to_dict() for course in courses]
             return make_response(courses_dict, 200)
-        else:
-            return make_response({"Error": "No courses in Database"}, 404)
+        
+        return make_response({"Error": "No courses in Database"}, 404)
 
     # Create a new Course => ADMIN
     def post(self):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER","STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER", "STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
-
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+        
         new_course_data = request.get_json()
 
         if not new_course_data:
-            return make_response({"Error": "Invalid data"}, 400)
-        else:
-            try:
-                new_course = Course(title = new_course_data.get('title'),
-                                    description = new_course_data.get('description'),
-                                    subject = new_course_data.get('subject'),
-                                    duration = new_course_data.get('duration'),
-                                    teacher_id = new_course_data.get('teacher_id') if hasattr(new_course_data, "teacher_id") else 0,
-                                    created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
-                                    )
-                db.session.add(new_course)
-                db.session.commit()
-                return make_response(new_course.to_dict(), 201)
-            except ValueError as e:
-                db.session.rollback()
-                return make_response({"Error": f"{e}"}, 500)
+            return make_response({"Error": "Please enter course data"}, 400)
+        
+        try:
+            new_course = Course(title = new_course_data.get('title'),
+                                description = new_course_data.get('description'),
+                                subject = new_course_data.get('subject'),
+                                duration = new_course_data.get('duration'),
+                                teacher_id = new_course_data.get('teacher_id') if hasattr(new_course_data, "teacher_id") else 0,
+                                created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
+                                )
+            db.session.add(new_course)
+            db.session.commit()
+            return make_response(new_course.to_dict(), 201)
+        except ValueError as e:
+            db.session.rollback()
+            return make_response({"Error": f"{e}"}, 500)
 
 api.add_resource(Courses, "/courses", endpoint="courses")
 
@@ -446,16 +390,10 @@ class CourseById(Resource):
     # Get a single Course by ID => ADMIN, TEACHER, STUDENT
     def get(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],[])
 
-        if token:
-            auth_status = authorize(token[7:],[""])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
         
         if auth_status.get("role") == "STUDENT":
             course = Course.query.filter_by(_id = id).first_or_404(description=f"No Course with Id: {id}")
@@ -470,16 +408,10 @@ class CourseById(Resource):
     # Update a Course => ADMIN, TEACHER
     def patch(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:],["STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
         
         if auth_status.get("role") == "TEACHER":
             course = Course.query.filter_by(_id = id, teacher_id = auth_status.get("public_id")).first_or_404(description=f"None of your Courses with Id: {id}")
@@ -511,16 +443,9 @@ class CourseById(Resource):
     # Delete a Course => ADMIN
     def delete(self, id):
         token = request.headers.get("Authorization")
-
-        if token:
-            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
+        auth_status = get_user(token[7:],["TEACHER","STUDENT"])
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         course = Course.query.filter_by(_id = id).first_or_404(description=f"No Course with Id: {id}")
         db.session.delete(course)
@@ -530,28 +455,20 @@ class CourseById(Resource):
 api.add_resource(CourseById, "/courses/<int:id>", endpoint="course_by_id")
 
 
-
 # Certificates
 class Certificates(Resource):
 
     # Get all Certificates => ADMIN, STUDENT
     def get(self):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER"])
 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Token has Expired"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
         
         certificates = Certificate.query.all()
         
         if len(certificates) > 0:
-
             if auth_status.get("role") == "STUDENT":
                 my_certificates_dict = [certificate.to_dict(rules = ('-student._id', '-student.created_at' )) for certificate in certificates if certificate.student_id == auth_status.get("public_id")]
                 return make_response(my_certificates_dict,200)
@@ -564,30 +481,26 @@ class Certificates(Resource):
     # Create a Certificate => ADMIN
     def post(self):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER", "STUDENT"])
+
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+        
         certificate_details = request.get_json()
 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER", "STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Token has Expired"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
-        
         if certificate_details:
             try:
                 new_certificate = Certificate(
-                                      enrollment_id = certificate_details.get("enrollment_id"),
-                                      issued_on = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
-                                      )
+                                    enrollment_id = certificate_details.get("enrollment_id"),
+                                    issued_on = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
+                                    )
                 db.session.add(new_certificate)
                 db.session.commit()
             except ValueError:
                 return make_response({"Error" : "Please enter valid Certificate details"}, 400)
-            
-        return make_response({"Success" : "Certificate created"}, 200)
+            return make_response({"Success" : "Certificate created"}, 200)
+        
+        return make_response({"Error" : "Please enter valid Certificate details"}, 400)
     
 api.add_resource(Certificates, "/certificates", endpoint="certificates")
 
@@ -596,60 +509,45 @@ class CertificateById(Resource):
     # Get a single Certificate by Id => ADMIN
     def get(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER", "STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER", "STUDENT"])
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
-        
         certificate = Certificate.query.filter_by(_id = id).first_or_404(description=f"No Certificate with Id: {id}")
         return make_response(certificate.to_dict(rules = ('-enrollment.course.lessons',)), 200)
     
     # Update a Certificate => ADMIN
     def patch(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER","STUDENT"])
                 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Token has Expired"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         certificate = Certificate.query.filter_by(_id = id).first_or_404(description=f"No certificate with Id: {id}")
         certificate_data = request.get_json()
         
-        try:
-            for key, value in certificate_data.items():
-                if hasattr(certificate, key):
-                    setattr(certificate, key, value)
-                    db.session.commit()
-            return make_response(certificate.to_dict(), 200)
-        except ValueError as e:
-            db.session.rollback()
-            return make_response({"Error": f"{e}"}, 500)
+        if certificate_data:
+            try:
+                for key, value in certificate_data.items():
+                    if hasattr(certificate, key):
+                        setattr(certificate, key, value)
+                        db.session.commit()
+                    return make_response(certificate.to_dict(), 200)
+            except ValueError as e:
+                db.session.rollback()
+                return make_response({"Error": f"{e}"}, 500)
+        
+        return make_response({"Error" : "Please supply certificate data"}, 400)
 
     # Delete a Certificate => ADMIN
     def delete(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER","STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         certificate = Certificate.query.filter_by(_id = id).first_or_404(description=f"No Certificate with Id: {id}")
         db.session.delete(certificate)
@@ -665,21 +563,14 @@ class Progresses(Resource):
     # Get all Progresses => ADMIN, STUDENT
     def get(self):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER"])
 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Token has Expired"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
         
         progresses = Progress.query.all()
         
         if len(progresses) > 0:
-
             if auth_status.get("role") == "STUDENT":
                 my_progresses_dict = [progress.to_dict() for progress in progresses if progress.enrollment.student_id == auth_status.get("public_id")]
                 return make_response(my_progresses_dict,200)
@@ -695,17 +586,12 @@ class Progresses(Resource):
     # Create a Progress => ADMIN
     def post(self):
         token = request.headers.get("Authorization")
+        auth_status = authorize(token[7:],["TEACHER", "STUDENT"])
+
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+        
         progress_details = request.get_json()
-
-        if token:
-            auth_status = authorize(token[7:],["TEACHER", "STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Token has Expired"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
         
         if progress_details:
             try:
@@ -714,10 +600,11 @@ class Progresses(Resource):
                                       )
                 db.session.add(new_progress)
                 db.session.commit()
+                return make_response({"Success" : "Progress Created"}, 200)
             except ValueError:
                 return make_response({"Error" : "Please enter valid Progress details"}, 400)
-            
-        return make_response({"Success" : "Progress Created"}, 200)
+        
+        return make_response({"Success" : "Please enter progress details"}, 400)
     
 api.add_resource(Progresses, "/progresses", endpoint="progresses")
 
@@ -726,16 +613,10 @@ class ProgressById(Resource):
     # Get a single Progress by Id => ADMIN
     def get(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER", "STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER", "STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
         
         progress = Progress.query.filter_by(_id = id).first_or_404(description=f"No Progress with Id: {id}")
         return make_response(progress.to_dict(), 200)
@@ -743,43 +624,34 @@ class ProgressById(Resource):
     # Update a Progress => ADMIN
     def patch(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER","STUDENT"])
                 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Token has Expired"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
+        if auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         progress = Progress.query.filter_by(_id = id).first_or_404(description=f"No progress with Id: {id}")
         progress_data = request.get_json()
         
-        try:
-            for key, value in progress_data.items():
-                if hasattr(progress, key):
-                    setattr(progress, key, value)
-                    db.session.commit()
-            return make_response(progress.to_dict(), 200)
-        except ValueError as e:
-            db.session.rollback()
-            return make_response({"Error": f"{e}"}, 500)
+        if progress_data:
+            try:
+                for key, value in progress_data.items():
+                    if hasattr(progress, key):
+                        setattr(progress, key, value)
+                        db.session.commit()
+                return make_response(progress.to_dict(), 200)
+            except ValueError as e:
+                db.session.rollback()
+                return make_response({"Error": f"{e}"}, 500)
+        
+        return make_response({"Error" : "Please enter progress data"})
 
     # Delete a Progress => ADMIN
     def delete(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],["TEACHER","STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error" : "Invalid Token"}, 401)
-        else:
-            return make_response({"Error" : "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         progress = Progress.query.filter_by(_id = id).first_or_404(description=f"No progress with Id: {id}")
         db.session.delete(progress)
@@ -789,137 +661,134 @@ class ProgressById(Resource):
 api.add_resource(ProgressById, "/progresses/<int:id>", endpoint="progress_by_id")
 
 
+# Lessons
 class Lessons(Resource):
+
     # Get all lessons => ADMIN, TEACHER, STUDENT
     def get(self):
-        token = request.cookies.get("jwtToken")
+        token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], [])
 
-        if not token or authorize(token, []) in [1, 2, 3]:
-            return make_response({"error": "Unauthorized or token expired"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         lessons = Lesson.query.all()
         return make_response([lesson.to_dict() for lesson in lessons], 200) if lessons else make_response({"error": "No lessons found"}, 404)
 
     # Create a lesson => ADMIN
     def post(self):
-        token = request.cookies.get("jwtToken")
+        token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
 
-        if not token or authorize(token, ["ADMIN"]) in [1, 2, 3]:
-            return make_response({"error": "Unauthorized or token expired"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         lesson_data = request.get_json()
-        if not lesson_data:
-            return make_response({"error": "Invalid data"}, 400)
 
-        # Ensure course exists before adding a lesson
-        course = Course.query.filter_by(_id=lesson_data.get("course_id")).first()
-        if not course:
-            return make_response({"error": "Course not found"}, 404)
-
-        try:
-            new_lesson = Lesson(
-                title=lesson_data.get("title"),
-                content=lesson_data.get("content"),
-                video_url=lesson_data.get("video_url"),
-                resources=lesson_data.get("resources"),
-                course_id=lesson_data.get("course_id"),
-                created_at=datetime.now().strftime("%d/%m/%Y"),
-            )
-            db.session.add(new_lesson)
-            db.session.commit()
-            return make_response(new_lesson.to_dict(), 201)
-        except ValueError as e:
-            db.session.rollback()
-            return make_response({"error": str(e)}, 500)
-
+        if lesson_data:
+            try:
+                new_lesson = Lesson(
+                    title=lesson_data.get("title"),
+                    content=lesson_data.get("content"),
+                    video_url=lesson_data.get("video_url"),
+                    resources=lesson_data.get("resources"),
+                    course_id=lesson_data.get("course_id"),
+                    created_at=datetime.now().strftime("%d/%m/%Y"),
+                    )
+                db.session.add(new_lesson)
+                db.session.commit()
+                return make_response(new_lesson.to_dict(), 201)
+            except ValueError as e:
+                db.session.rollback()
+                return make_response({"error": str(e)}, 500)
+        
+        return make_response({"Error" : "Please enter lesson data"}, 400)
+        
+api.add_resource(Lessons, "/lessons", endpoint="lessons")
 
 class LessonById(Resource):
+
     # Get a lesson => ADMIN, TEACHER, STUDENT
     def get(self, id):
-        token = request.cookies.get("jwtToken")
+        token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:],[])
 
-        if not token or authorize(token, []) in [1, 2, 3]:
-            return make_response({"error": "Unauthorized or token expired"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         lesson = Lesson.query.filter_by(_id=id).first_or_404(description=f"No lesson found with ID {id}")
         return make_response(lesson.to_dict(), 200)
 
     # Update a lesson => ADMIN, TEACHER
     def patch(self, id):
-        token = request.cookies.get("jwtToken")
+        token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["ADMIN", "TEACHER"])
 
-        if not token or authorize(token, ["ADMIN", "TEACHER"]) in [1, 2, 3]:
-            return make_response({"error": "Unauthorized or token expired"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         lesson = Lesson.query.filter_by(_id=id).first_or_404(description=f"No lesson found with ID {id}")
         lesson_data = request.get_json()
 
-        try:
-            for key, value in lesson_data.items():
-                if hasattr(lesson, key):
-                    setattr(lesson, key, value)
-            db.session.commit()
-            return make_response(lesson.to_dict(), 200)
-        except ValueError as e:
-            db.session.rollback()
-            return make_response({"error": str(e)}, 500)
+        if lesson_data:
+            try:
+                for key, value in lesson_data.items():
+                    if hasattr(lesson, key):
+                        setattr(lesson, key, value)
+                db.session.commit()
+                return make_response(lesson.to_dict(), 200)
+            except ValueError as e:
+                db.session.rollback()
+                return make_response({"error": str(e)}, 500)
+        
+        return make_response({"Error" : "Please enter lesson data"})
 
     # Delete a lesson => ADMIN
     def delete(self, id):
-        token = request.cookies.get("jwtToken")
+        token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["ADMIN"])
 
-        if not token or authorize(token, ["ADMIN"]) in [1, 2, 3]:
-            return make_response({"error": "Unauthorized or token expired"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         lesson = Lesson.query.filter_by(_id=id).first_or_404(description=f"No lesson found with ID {id}")
         db.session.delete(lesson)
         db.session.commit()
         return make_response({"success": f"Lesson {id} deleted"}, 200)
     
-api.add_resource(Lessons, "/lessons", endpoint="lessons")
 api.add_resource(LessonById, "/lessons/<int:id>", endpoint="lesson_by_id")
 
 
 # Quizzes
 class Quizzes(Resource):
+
     # Get all quizzes => ADMIN, TEACHER, STUDENT
     def get(self):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], [])
 
-        if token:
-            auth_status = authorize(token[7:], [])
-
-            if auth_status == 1:
-                return make_response({"Error": "Unauthorized access"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error": "Invalid Token"}, 401)
-        else:
-            return make_response({"Error": "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         quizzes = Quiz.query.all()
 
-        if quizzes:
+        if len(quizzes) > 0:
             if auth_status.get("role") == "STUDENT":
                 quizzes_dict = [quiz.to_dict(include_answers=False) for quiz in quizzes]
             else:
                 quizzes_dict = [quiz.to_dict(include_answers=True) for quiz in quizzes]
 
             return make_response(quizzes_dict, 200)
+        
         return make_response({"Error": "No quizzes found"}, 404)
 
     # Create a new quiz => ADMIN
     def post(self):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:], ["TEACHER", "STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error": "Unauthorized access"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error": "Invalid Token"}, 401)
-        else:
-            return make_response({"Error": "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         new_quiz_data = request.get_json()
 
@@ -939,26 +808,23 @@ class Quizzes(Resource):
             db.session.commit()
             return make_response(new_quiz.to_dict(include_answers=True), 201)
 
-        except Exception as e:
+        except ValueError as e:
             db.session.rollback()
             return make_response({"Error": f"{e}"}, 500)
         
+api.add_resource(Quizzes, "/quizzes", endpoint="quizzes")
+        
 class QuizById(Resource):
+
     # Get a specific quiz => ADMIN, TEACHER, STUDENT
     def get(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], [""])
 
-        if token:
-            auth_status = authorize(token[7:], [""])
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
-            if auth_status == 1:
-                return make_response({"Error": "Unauthorized access"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error": "Invalid Token"}, 401)
-        else:
-            return make_response({"Error": "Sign in to continue"}, 401)
-
-        quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with ID: {id}")
+        quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with Id: {id}")
 
         if auth_status.get("role") == "STUDENT":
             return make_response(quiz.to_dict(include_answers=False), 200)
@@ -968,50 +834,36 @@ class QuizById(Resource):
     # Update a quiz => ADMIN, TEACHER
     def patch(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:], ["STUDENT"])
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
-            if auth_status == 1:
-                return make_response({"Error": "Unauthorized access"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error": "Invalid Token"}, 401)
-        else:
-            return make_response({"Error": "Sign in to continue"}, 401)
-
-        quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with ID: {id}")
+        quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with Id: {id}")
         new_quiz_data = request.get_json()
 
-        try:
-            for key, value in new_quiz_data.items():
-                if hasattr(quiz, key):
-                    setattr(quiz, key, value)
-                    db.session.commit()
-
-            return make_response(quiz.to_dict(include_answers=True), 200)
-
-        except Exception as e:
-            db.session.rollback()
-            return make_response({"Error": f"{e}"}, 500)
+        if new_quiz_data:
+            try:
+                for key, value in new_quiz_data.items():
+                    if hasattr(quiz, key):
+                        setattr(quiz, key, value)
+                        db.session.commit()
+                return make_response(quiz.to_dict(include_answers=True), 200)
+            except ValueError as e:
+                db.session.rollback()
+                return make_response({"Error": f"{e}"}, 500)
+            
+        return make_response({"Error" : "Please enter Quiz data"}, 400)
 
     # Attempt a quiz => STUDENT (Max 3 attempts per quiz, must complete all)
     def post(self, lesson_id, quiz_id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["ADMIN", "TEACHER"])
 
-        if token:
-            auth_status = authorize(token[7:], ["ADMIN", "TEACHER"])
-            if auth_status == 1:
-                return make_response({"Error": "Unauthorized access"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error": "Invalid Token"}, 401)
-        else:
-            return make_response({"Error": "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
-        student_id = auth_status.get("id")
-        role = auth_status.get("role")
-
-        if role != "STUDENT":
-            return make_response({"Error": "Only students can attempt quizzes"}, 403)
+        student_id = auth_status.get("public_id")
 
         # Fetch quiz
         quiz = Quiz.query.filter_by(_id=quiz_id, lesson_id=lesson_id, student_id=student_id).first_or_404(
@@ -1056,16 +908,10 @@ class QuizById(Resource):
     # Delete a quiz => ADMIN
     def delete(self, id):
         token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
 
-        if token:
-            auth_status = authorize(token[7:], ["TEACHER", "STUDENT"])
-
-            if auth_status == 1:
-                return make_response({"Error": "Unauthorized access"}, 401)
-            elif auth_status in [2, 3]:
-                return make_response({"Error": "Invalid Token"}, 401)
-        else:
-            return make_response({"Error": "Sign in to continue"}, 401)
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
 
         quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with ID: {id}")
 
@@ -1074,6 +920,108 @@ class QuizById(Resource):
 
         return make_response({"Success": "Quiz deleted successfully"}, 200)
     
+api.add_resource(QuizById, "/quizzes/<int:id>", endpoint="quiz_by_id")
+
+
+# Activities
+class Activities(Resource):
+
+    # Get all activities => ADMIN, TEACHER
+    def get(self):
+        token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["STUDENT"])
+        
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+        
+        admins = [admin.public_id for admin in User.query.filter_by(role = "ADMIN").all()]
+        
+        activities = Activity.query.all()
+
+        if len(activities) > 0:
+            if auth_status.get("role") == "TEACHER":
+                activities_dict = [activity.to_dict(only = ('_id','action', 'timestamp', 'user.name')) for activity in activities for course in activity.user.courses if activity.user_id != auth_status.get("public_id") and activity.user_id not in admins and course.teacher_id == auth_status.get("public_id")]
+                return make_response([activities_dict],200)
+            
+            activities_dict = [activity.to_dict(only = ('_id', 'action', 'timestamp', 'user.name')) for activity in activities]
+            return make_response(activities_dict,200)
+        
+        return make_response({"Error" : "No activities in database"}, 404)
     
+    # Post a new Activity => ADMIN, TEACHER, STUDENT
+    def post(self):
+        token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], [])
+
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+        
+        new_activity_data = request.get_json()
+
+        if new_activity_data:
+            try:
+                new_activity = Activity(user_id=new_activity_data.get("user_id"), action=new_activity_data.get("action"), timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+                db.session.add(new_activity)
+                db.session.commit()
+                return make_response({"Success":"Activity Created"}, 201)
+            except ValueError as e:
+                db.session.rollback()
+                return make_response({"Error": f"{e}"}, 500)
+        
+        return make_response({"Error" : "Please supply activity data"}, 400)
+    
+    # Delete all Logs => ADMIN
+    def delete(self):
+        token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
+
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+        
+        activities = Activity.query.all()
+
+        if not activities:
+            return make_response({"Error" : "No activities to delete"}, 404)
+        
+        for activity in activities:
+            db.session.delete(activity) 
+            
+        db.session.commit()
+        return make_response({"Success" : "Cleared Activity Log"})
+            
+api.add_resource(Activities, "/activities", endpoint="activities")
+
+class ActivityById(Resource):
+
+    # Get a specific Activity => ADMIN
+    def get(self, id):
+        token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
+
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+
+        activity = Activity.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with Id: {id}")
+        
+        return make_response(activity.to_dict(only = ('_id', 'user.name', 'action', 'timestamp')), 200)
+    
+    # Delete a specific Activity => ADMIN
+    def delete(self, id):
+        token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
+
+        if not auth_status:
+            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+
+        activity = Activity.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with Id: {id}")
+        db.session.delete(activity)
+        db.session.commit()
+        
+        return make_response({"Success" : "Deleted Log"}, 200)
+
+
+api.add_resource(ActivityById, "/activities/<int:id>", endpoint="activities_by_id")
+
+
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
