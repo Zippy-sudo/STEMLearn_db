@@ -119,7 +119,6 @@ class Lesson(db.Model, SerializerMixin):
     title = db.Column(db.String, nullable=False)
     content = db.Column(db.Text, nullable=False)
     video_url = db.Column(db.String, nullable=True)
-    resources = db.Column(db.JSON, nullable=True)
     course_id = db.Column(db.Integer, db.ForeignKey("courses._id"), nullable=False)
     created_at = db.Column(db.String, nullable=False)
 
@@ -127,9 +126,11 @@ class Lesson(db.Model, SerializerMixin):
     course = db.relationship("Course", back_populates="lessons")
     quizzes = db.relationship("Quiz", back_populates="lesson", cascade="all, delete-orphan")
     progresses = db.relationship("Progress", back_populates="lesson", cascade="all, delete-orphan")
+    
+    resources = db.relationship("Resource", back_populates="lesson", cascade="all, delete-orphan")
 
     # Serialization rules
-    serialize_rules = ('-course.enrollments', '-course.students', '-course.certificates','-course.lessons', '-progresses.lesson', '-quizzes.lesson', '-quizzes.student')
+    serialize_rules = ('-course.enrollments', '-course.students', '-course.certificates','-course.lessons', '-progresses.lesson', '-quizzes.lesson', '-quizzes.student', '-resources.lesson')
 
     def __repr__(self):
         return f"<Lesson {self.title}, Course: {self.course.title}>"
@@ -178,6 +179,25 @@ class Quiz(db.Model, SerializerMixin):
 
     def __repr__(self):
         return f"<Lesson {self.title}, Lesson: {self.lesson.title}>"
+    
+# Resource Table
+class Resource(db.Model, SerializerMixin):
+    __tablename__ = "resources"
+
+    _id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey("lessons._id"), nullable=False)
+    title = db.Column(db.String, nullable=False)
+    file_url = db.Column(db.String, nullable=False)
+   
+
+    # Relationships
+    lesson = db.relationship("Lesson", back_populates="resources")
+
+    # Serialization rules
+    serialize_rules = ('-lesson.resources',)
+
+    def __repr__(self):
+        return f"<Resource {self._id}, Title: {self.title}, Lesson ID: {self.lesson_id}>"
 
 # Activity Table
 class Activity(db.Model, SerializerMixin):

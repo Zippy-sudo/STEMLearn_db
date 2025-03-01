@@ -2,7 +2,7 @@ from app import app
 from uuid import uuid4
 from datetime import datetime, timezone
 
-from models import db, User, Enrollment, Course, Certificate, Lesson, Quiz, Progress, Activity
+from models import db, User, Enrollment, Course, Certificate, Lesson, Quiz, Progress, Activity, Resource
 
 with app.app_context():
 
@@ -15,6 +15,7 @@ with app.app_context():
     Progress.query.delete()
     Quiz.query.delete()
     Activity.query.delete()
+    Resource.query.delete()
 
     print("Generating Users...")
 
@@ -23,8 +24,7 @@ with app.app_context():
                 email = "tristantal@gmail.com",
                 password_hash= "admin",
                 role = "ADMIN",
-                created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
-                )
+                created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y"))
     User2 = User(name = "Sasha Hao",
                 public_id = str(uuid4()),
                 email = "sashahao@gmail.com",
@@ -145,8 +145,7 @@ with app.app_context():
     Lesson1 = Lesson(
         title="Introduction to Programming",
         content="This lesson covers the basics of programming, including variables, loops, and functions.",
-        video_url="https://example.com/intro-to-progamming",
-        resources=["slides.pdf", "code_examples.zip"],
+        video_url="https://example.com/intro-to-programming",
         course_id=Course1._id,
         created_at=datetime.now().strftime("%d/%m/%Y")
     )
@@ -154,7 +153,6 @@ with app.app_context():
         title="Data Structures",
         content="This lesson explains different data storage techniques, such as arrays, linked lists, and trees.",
         video_url="https://example.com/data-structures",
-        resources=["slides.pdf", "practice_problems.pdf"],
         course_id=Course1._id,
         created_at=datetime.now().strftime("%d/%m/%Y")
     )
@@ -162,7 +160,6 @@ with app.app_context():
         title="Thermodynamics",
         content="This lesson covers the fundamentals of heat and energy transfer.",
         video_url="https://example.com/thermodynamics",
-        resources=["slides.pdf", "lab_manual.pdf"],
         course_id=Course2._id,
         created_at=datetime.now().strftime("%d/%m/%Y")
     )
@@ -170,13 +167,63 @@ with app.app_context():
         title="Environmental Impact Assessment",
         content="This lesson focuses on analyzing the environmental effects of projects.",
         video_url="https://example.com/environmental-impact",
-        resources=["slides.pdf", "case_studies.pdf"],
         course_id=Course3._id,
         created_at=datetime.now().strftime("%d/%m/%Y")
     )
 
-    Activity4 = Activity(user_id=User1.public_id,action="Creating Lessons", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+
+    Activity4 = Activity(user_id=User2.public_id,action="Creating Lessons", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
     db.session.add_all([Lesson1, Lesson2, Lesson3, Lesson4, Activity4])
+    
+    # Create Resources for Lessons
+    Resource1 = Resource(
+        title="Slides",
+        file_url="slides.pdf",
+        lesson_id=Lesson1._id
+    )
+    Resource2 = Resource(
+        title="Code Examples",
+        file_url="code_examples.zip",
+        lesson_id=Lesson1._id
+    )
+    Resource3 = Resource(
+        title="Slides",
+        file_url="slides.pdf",
+        lesson_id=Lesson2._id
+    )
+    Resource4 = Resource(
+        title="Practice Problems",
+        file_url="practice_problems.pdf",
+        lesson_id=Lesson2._id
+    )
+    Resource5 = Resource(
+        title="Slides",
+        file_url="slides.pdf",
+        lesson_id=Lesson3._id
+    )
+    Resource6 = Resource(
+        title="Lab Manual",
+        file_url="lab_manual.pdf",
+        lesson_id=Lesson3._id
+    )
+    Resource7 = Resource(
+        title="Slides",
+        file_url="slides.pdf",
+        lesson_id=Lesson4._id
+    )
+    Resource8 = Resource(
+        title="Case Studies",
+        file_url="case_studies.pdf",
+        lesson_id=Lesson4._id
+    )
+
+    # Assign Resources to Lessons
+    Lesson1.resources = [Resource1, Resource2]
+    Lesson2.resources = [Resource3, Resource4]
+    Lesson3.resources = [Resource5, Resource6]
+    Lesson4.resources = [Resource7, Resource8]
+
+    db.session.add_all([Lesson1, Lesson2, Lesson3, Lesson4, Resource1, Resource2, Resource3, Resource4, Resource5, Resource6, Resource7, Resource8, Activity4])
     db.session.commit()
     
     print("Generating Quizzes...")
