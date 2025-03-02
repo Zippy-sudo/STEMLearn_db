@@ -23,9 +23,11 @@ class User(db.Model, SerializerMixin):
     certificates = association_proxy("enrollments", "certificate", creator=lambda certificate_obj : Certificate(certificate=certificate_obj))
     quizzes = db.relationship("Quiz", back_populates="student", cascade="all, delete-orphan")
     activities = db.relationship("Activity", back_populates="user", cascade="all, delete-orphan")
+    assignment_submissions = db.relationship("AssignmentSubmission", back_populates="student", cascade="all, delete-orphan")
+    discussions = db.relationship("Discussion", back_populates="user")
     
     # Serialization rules
-    serialize_rules = ('-_password_hash', '-enrollments.student', '-courses.enrollments', '-courses.students', '-courses.certificates', '-courses.lessons', '-certificates.enrollment', '-certificates.course', '-quizzes.student', '-quizzes.lesson', '-courses_taught.enrollments','-courses_taught.certificates', '-courses_taught.lessons', '-courses_taught.teacher', "-courses_taught.students", '-activities')
+    serialize_rules = ('-_password_hash', '-enrollments.student', '-courses.enrollments', '-courses.students', '-courses.certificates', '-courses.lessons', '-certificates.enrollment', '-certificates.course', '-quizzes.student', '-quizzes.lesson', '-courses_taught.enrollments','-courses_taught.certificates', '-courses_taught.lessons', '-courses_taught.teacher', "-courses_taught.students", '-activities', '-assignment_submissions.student', '-discussions.user')
 
     def __repr__(self):
         return f'<User {self._id}, Name: {self.name}, Role: {self.role}>'
@@ -126,8 +128,9 @@ class Lesson(db.Model, SerializerMixin):
     course = db.relationship("Course", back_populates="lessons")
     quizzes = db.relationship("Quiz", back_populates="lesson", cascade="all, delete-orphan")
     progresses = db.relationship("Progress", back_populates="lesson", cascade="all, delete-orphan")
-    
-    resources = db.relationship("Resource", back_populates="lesson", cascade="all, delete-orphan")
+    resources = db.relationship("LessonResource", back_populates="lesson", cascade="all, delete-orphan")
+    assignment_submissions = db.relationship("AssignmentSubmission", back_populates="lesson", cascade="all, delete-orphan")
+    discussions = db.relationship("Discussion", back_populates="lesson")
 
     # Serialization rules
     serialize_rules = ('-course.enrollments', '-course.students', '-course.certificates','-course.lessons', '-progresses.lesson', '-quizzes.lesson', '-quizzes.student', '-resources.lesson')
@@ -181,7 +184,7 @@ class Quiz(db.Model, SerializerMixin):
         return f"<Lesson {self.title}, Lesson: {self.lesson.title}>"
     
 # Resource Table
-class Resource(db.Model, SerializerMixin):
+class LessonResource(db.Model, SerializerMixin):
     __tablename__ = "resources"
 
     _id = db.Column(db.Integer, primary_key=True)
@@ -211,5 +214,51 @@ class Activity(db.Model, SerializerMixin):
     # Relationships
     user = db.relationship("User", back_populates="activities")
 
+    # Serialization rules
+    serialize_only = ('_id', 'user_id', 'action', 'timestamp', 'user.name',)
+
     def __repr__(self):
         return f"<Activity: {self.action} on {self.timestamp.split()[0]} at {self.timestamp.split()[1]}"
+    
+# Assignment Submission Table
+class AssignmentSubmission(db.Model, SerializerMixin):
+    __tablename__ = "assignments_submissions"
+
+    _id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("users.public_id"), nullable=False)
+    lesson_id = db.Column(db.Integer, db.ForeignKey("lessons._id"))
+    submission_text = db.Column(db.String, nullable=True)
+    file_url = db.Column(db.String, nullable=False)
+    submitted_at = db.Column(db.String, nullable=False)
+    teacher_feedback = db.Column(db.String, nullable=True)
+    grade = db.Column(db.Float, nullable=True)
+     
+    # Relationships
+    student = db.relationship("User", back_populates="assignment_submissions")
+    lesson = db.relationship("Lesson", back_populates="assignment_submissions")
+
+    # Serialization Rules
+    serialize_only = ('_id', 'student_id', 'lesson_id', 'submission_text', 'file_url', 'submitted_at', 'teacher_feedback', 'grade', 'student.name', 'lesson.title')
+
+    def __repr__(self):
+        return f"<Submission: {self._id}, Student: {self.student.name}, Lesson: {self.lesson.title}>"
+    
+# Discussion Table
+class Discussion(db.Model, SerializerMixin):
+    __tablename__ = "discussions"
+
+    _id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.public_id"), nullable = False)
+    lesson_id = db.Column(db.Integer, db.ForeignKey("lessons._id"), nullable = False)
+    message = db.Column(db.String, nullable = False )
+    created_at = db.Column(db.String, nullable = False)
+
+    # Relationship
+    user = db.relationship("User", back_populates="discussions")
+    lesson = db.relationship("Lesson", back_populates="discussions")
+
+    # Serialization Rules
+    serialize_only = ('_id', 'user_id', 'lesson_id', 'message', 'created_at', 'user.name', 'lesson.title')
+
+    def __repr__(self):
+        return f"<Discussion: {self._id}, User: {self.user.name}, Lesson{self.lesson.title}>"
