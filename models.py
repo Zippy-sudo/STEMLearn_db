@@ -63,7 +63,7 @@ class Enrollment(db.Model, SerializerMixin):
     progresses = db.relationship("Progress", back_populates="enrollment", cascade="all, delete-orphan")
 
     # Serialize Rules
-    serialize_rules = ('-student', '-course.enrollments', '-course.students', '-course.certificates', '-certificate.enrollment', '-progresses.enrollment, -progresses.lessons')
+    serialize_rules = ('-student.enrollments', '-student.courses', '-student.certificates', '-student.activities', '-student.assignment_submissions', '-student.discussions' '-course.enrollments', '-course.students', '-course.certificates', '-certificate.enrollment', '-progresses.enrollment', '-progresses.lessons', '-progresses.course')
 
     def __repr__(self):
         return f"<Enrollment: {self._id}, Student: {self.student}, Course: {self.course}>"
@@ -170,8 +170,9 @@ class Quiz(db.Model, SerializerMixin):
     question = db.Column(db.Text, nullable=False)
     options = db.Column(db.JSON, nullable=False)  
     correct_answer = db.Column(db.String, nullable=False)
-    attempts = db.Column(db.Integer, default=0)  
-    created_at = db.Column(db.String, nullable=False)
+    attempts = db.Column(db.Integer, default=0)
+    grade = db.Column(db.Integer, default=0)
+    due_date = db.Column(db.String, nullable=False)
 
     # Relationships
     lesson = db.relationship("Lesson", back_populates="quizzes")

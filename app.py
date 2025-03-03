@@ -32,9 +32,10 @@ def authorize(token):
 
 @app.before_request
 def check_auth():
+
     if request.method == 'OPTIONS':
         response = make_response({},200)
-        response.headers.set('Access-Control-Allow-Origin','https://superb-duckanoo-18547b.netlify.app/')
+        response.headers.set('Access-Control-Allow-Origin','https://superb-duckanoo-18547b.netlify.app')
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST , PATCH, DELETE, OPTIONS')
         response.headers.set('Access-Control-Allow-Headers', ' Content-Type')
         return response 
@@ -42,15 +43,20 @@ def check_auth():
     if request.path not in ["/", "/login", "/logout", "/signup", "/unauthCourses"]:
         token = request.headers.get("Authorization")[7:]
         auth_status = authorize(token)
+        if auth_status not in [1,2,3,4]:
+            user_id = jwt.decode(jwt = token, key = SECRET_KEY, algorithms="HS256")
+            activity = Activity(user_id = user_id.get("public_id"), action = f"{request.method} {request.endpoint}", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+            db.session.add(activity)
+            db.session.commit()
 
-        if auth_status in [1,2,3,4]:
+        else:
             return make_response({"Error" : "Invalid Token"}, 400)
-        
+    
     return None
 
 @app.after_request
 def after_request(response):
-    response.headers['Access-Control-Allow-Origin'] = 'https://superb-duckanoo-18547b.netlify.app/'
+    response.headers['Access-Control-Allow-Origin'] = 'https://superb-duckanoo-18547b.netlify.app'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -121,7 +127,7 @@ def get_unauth_courses():
     courses = Course.query.all()
 
     if len(courses) > 0:
-        courses_dict = [course.to_dict(only = ("_id", "title", "description", "subject", "duration", 'teacher.name', )) for course in courses]
+        courses_dict = [course.to_dict(only = ("_id", "title", "description", "subject", "duration", 'teacher.name', "lessons.title")) for course in courses]
         return make_response(courses_dict, 200)
     
     return make_response({"Error" : "No courses in database"})
@@ -238,10 +244,10 @@ api.add_resource(UserById, "/users/<string:id>", endpoint="user_by_id")
 # Enrollments
 class Enrollments(Resource):
 
-    # Get all Enrollments => ADMIN,TEACHER
+    # Get all Enrollments => ADMIN,TEACHER,STUDENT
     def get(self):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:],["STUDENT"])
+        auth_status = get_user(token[7:],[])
         
         if not auth_status:
             return make_response({"Error" : "You are not authorized to access this resource"}, 401)
@@ -249,6 +255,9 @@ class Enrollments(Resource):
         enrollments = Enrollment.query.all()
 
         if len(enrollments) > 0:
+            if auth_status.get("role") == "STUDENT":
+                enrollments_dict = [enrollment.to_dict() for enrollment in enrollments if enrollment.student_id == auth_status.get("public_id")]
+                return enrollments_dict
             enrollments_dict = [enrollment.to_dict() for enrollment in enrollments]
             return make_response(enrollments_dict, 200)
         
