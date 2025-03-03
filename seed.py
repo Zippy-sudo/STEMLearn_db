@@ -1,6 +1,6 @@
 from app import app
 from uuid import uuid4
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from models import db, User, Enrollment, Course, Certificate, Lesson, Quiz, Progress, Activity, LessonResource, AssignmentSubmission, Discussion
 
@@ -436,7 +436,7 @@ with app.app_context():
             options=["Create, Read, Update, Delete", "Copy, Retrieve, Update, Destroy"],
             correct_answer="Create, Read, Update, Delete",
             attempts=0,
-            created_at=datetime.now().strftime("%d/%m/%Y")
+            due_date=(datetime.now(timezone.utc) + timedelta(days = 7)).strftime("%d/%m/%Y")
         ),
         Quiz(
             lesson_id=Lesson2._id,
@@ -445,7 +445,7 @@ with app.app_context():
             options=["GET", "POST", "PUT", "DELETE"],
             correct_answer="POST",
             attempts=0,
-            created_at=datetime.now().strftime("%d/%m/%Y")
+            due_date=(datetime.now(timezone.utc) + timedelta(days = 7)).strftime("%d/%m/%Y")
         ),
         Quiz(
             lesson_id=Lesson3._id,
@@ -454,7 +454,7 @@ with app.app_context():
             options=["SELECT", "INSERT", "UPDATE", "DELETE"],
             correct_answer="SELECT",
             attempts=0,
-            created_at=datetime.now().strftime("%d/%m/%Y")
+            due_date=(datetime.now(timezone.utc) + timedelta(days = 7)).strftime("%d/%m/%Y")
         ),
         Quiz(
             lesson_id=Lesson4._id,
@@ -468,7 +468,7 @@ with app.app_context():
             ],
             correct_answer="To remove data from the database",
             attempts=0,
-            created_at=datetime.now().strftime("%d/%m/%Y")
+            due_date=(datetime.now(timezone.utc) + timedelta(days = 7)).strftime("%d/%m/%Y")
         )
     ]
 
