@@ -10,7 +10,7 @@ class User(db.Model, SerializerMixin):
 
     _id = db.Column(db.Integer, primary_key = True)
     name = db.Column(db.String, nullable = False)
-    public_id = db.Column(db.String, nullable = False)
+    public_id = db.Column(db.String, unique=True, nullable = False)
     email = db.Column(db.String, nullable = False)
     _password_hash = db.Column(db.String, nullable = False)
     role = db.Column(db.String, nullable = False)
@@ -51,7 +51,7 @@ class Enrollment(db.Model, SerializerMixin):
     __tablename__ = 'enrollments'
 
     _id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('users.public_id'), nullable=False)
+    student_id = db.Column(db.String, db.ForeignKey('users.public_id'), nullable=False)
     course_id = db.Column(db.Integer, db.ForeignKey('courses._id'), nullable=False)
     enrolled_on = db.Column(db.String, nullable=False)
     completion_percentage = db.Column(db.Float,nullable=False)
@@ -77,7 +77,7 @@ class Course(db.Model, SerializerMixin):
     description = db.Column(db.Text, nullable=False)
     subject = db.Column(db.String, nullable=False)
     duration = db.Column(db.Integer, nullable=False)  
-    teacher_id = db.Column(db.Integer, db.ForeignKey('users.public_id'), nullable=True)
+    teacher_id = db.Column(db.String, db.ForeignKey('users.public_id'), nullable=True)
     created_at = db.Column(db.String, nullable=False)
 
     # Relationships
@@ -166,7 +166,7 @@ class Quiz(db.Model, SerializerMixin):
 
     _id = db.Column(db.Integer, primary_key=True)
     lesson_id = db.Column(db.Integer, db.ForeignKey("lessons._id"), nullable=False)
-    student_id = db.Column(db.Integer, db.ForeignKey("users.public_id"), nullable=False)
+    student_id = db.Column(db.String, db.ForeignKey("users.public_id"), nullable=False)
     question = db.Column(db.Text, nullable=False)
     options = db.Column(db.JSON, nullable=False)  
     correct_answer = db.Column(db.String, nullable=False)
@@ -207,7 +207,7 @@ class Activity(db.Model, SerializerMixin):
     __tablename__ = "activities"
 
     _id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.public_id"), nullable=False)
+    user_id = db.Column(db.String, db.ForeignKey("users.public_id"), nullable=False)
     action = db.Column(db.String, nullable=False)
     timestamp = db.Column(db.String, nullable=False)
 
@@ -225,7 +225,7 @@ class AssignmentSubmission(db.Model, SerializerMixin):
     __tablename__ = "assignments_submissions"
 
     _id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey("users.public_id"), nullable=False)
+    student_id = db.Column(db.String, db.ForeignKey("users.public_id"), nullable=False)
     lesson_id = db.Column(db.Integer, db.ForeignKey("lessons._id"))
     submission_text = db.Column(db.String, nullable=True)
     file_url = db.Column(db.String, nullable=False)
@@ -248,7 +248,7 @@ class Discussion(db.Model, SerializerMixin):
     __tablename__ = "discussions"
 
     _id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.public_id"), nullable = False)
+    user_id = db.Column(db.String, db.ForeignKey("users.public_id"), nullable = False)
     lesson_id = db.Column(db.Integer, db.ForeignKey("lessons._id"), nullable = False)
     message = db.Column(db.String, nullable = False )
     created_at = db.Column(db.String, nullable = False)
