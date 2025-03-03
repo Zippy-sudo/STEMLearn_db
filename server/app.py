@@ -9,7 +9,8 @@ from flask import request, jsonify, make_response
 from flask_restful import Resource
 
 from config import app, db, api
-from models import User, Enrollment, Course, Lesson, Certificate, Progress, Activity
+from models import User, Enrollment, Course, Lesson, Certificate, Progress, Activity, Quiz
+from werkzeug.security import generate_password_hash
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -32,9 +33,9 @@ def authorize(token,disallowed_users):
         identity = jwt.decode(token, SECRET_KEY, algorithms="HS256")
         current_user = User.query.filter_by(public_id=identity.get("public_id")).first()
         if not current_user:
-            return 1
-        if current_user.role in disallowed_users:
             return 2
+        if current_user.role in disallowed_users:
+            return 1
         return {"role": current_user.role, "public_id": identity.get("public_id")}
     except ExpiredSignatureError:
         return 3
@@ -269,6 +270,7 @@ class Enrollments(Resource):
         else:
             return make_response({"Error": "No users in Database"}, 404)
 
+         
     # Create an Enrollment => ADMIN,STUDENT
     def post(self):
         token = request.headers.get("Authorization")
@@ -320,7 +322,6 @@ class EnrollmentById(Resource):
             return make_response({"Error" : "Sign in to continue"}, 401)
 
         enrollment = Enrollment.query.filter_by(_id = id).first_or_404(description=f"No enrollment with Id: {id}")
-
         return make_response(enrollment.to_dict(), 200)
 
     # Update an Enrollment => ADMIN
@@ -410,7 +411,7 @@ class Courses(Resource):
         token = request.headers.get("Authorization")
 
         if token:
-            auth_status = authorize(token[7:],["TEACHER", "STUDENT"])
+            auth_status = authorize(token[7:],["TEACHER","STUDENT"])
 
             if auth_status == 1:
                 return make_response({"Error" : "You are not authorized to access this endpoint"}, 401)
@@ -677,7 +678,6 @@ class Progresses(Resource):
             return make_response({"Error" : "Sign in to continue"}, 401)
         
         progresses = Progress.query.all()
-        
         if len(progresses) > 0:
 
             if auth_status.get("role") == "STUDENT":
@@ -691,7 +691,6 @@ class Progresses(Resource):
             return make_response(progresses_dict, 200)
     
         return make_response({"Error": "No progresses in Database"}, 404)
-    
     # Create a Progress => ADMIN
     def post(self):
         token = request.headers.get("Authorization")
@@ -802,7 +801,7 @@ class Lessons(Resource):
 
     # Create a lesson => ADMIN
     def post(self):
-        token = request.cookies.get("jwtToken")
+        token = request.headers.get("Authorization")
 
         if not token or authorize(token, ["ADMIN"]) in [1, 2, 3]:
             return make_response({"error": "Unauthorized or token expired"}, 401)
@@ -821,7 +820,7 @@ class Lessons(Resource):
                 title=lesson_data.get("title"),
                 content=lesson_data.get("content"),
                 video_url=lesson_data.get("video_url"),
-                resources=lesson_data.get("resources"),
+                resources=lesson_data.get("resources") or [],
                 course_id=lesson_data.get("course_id"),
                 created_at=datetime.now().strftime("%d/%m/%Y"),
             )
@@ -836,7 +835,7 @@ class Lessons(Resource):
 class LessonById(Resource):
     # Get a lesson => ADMIN, TEACHER, STUDENT
     def get(self, id):
-        token = request.cookies.get("jwtToken")
+        token = request.headers.get("Authorization")
 
         if not token or authorize(token, []) in [1, 2, 3]:
             return make_response({"error": "Unauthorized or token expired"}, 401)
@@ -846,7 +845,7 @@ class LessonById(Resource):
 
     # Update a lesson => ADMIN, TEACHER
     def patch(self, id):
-        token = request.cookies.get("jwtToken")
+        token = request.headers.get("Authorization")
 
         if not token or authorize(token, ["ADMIN", "TEACHER"]) in [1, 2, 3]:
             return make_response({"error": "Unauthorized or token expired"}, 401)
@@ -866,7 +865,7 @@ class LessonById(Resource):
 
     # Delete a lesson => ADMIN
     def delete(self, id):
-        token = request.cookies.get("jwtToken")
+        token = request.headers.get("Authorization")
 
         if not token or authorize(token, ["ADMIN"]) in [1, 2, 3]:
             return make_response({"error": "Unauthorized or token expired"}, 401)
@@ -1074,6 +1073,134 @@ class QuizById(Resource):
 
         return make_response({"Success": "Quiz deleted successfully"}, 200)
     
+class CourseLessons(Resource):
+    def get(self, course_id):
+        token = request.headers.get("Authorization")
+
+        if token:
+            auth_status = authorize(token[7:], ["STUDENT"])
+
+            if isinstance(auth_status, dict) and auth_status.get("role") == "TEACHER":
+                lessons = Lesson.query.filter_by(course_id=course_id).all()
+                return make_response([lesson.to_dict() for lesson in lessons], 200)
+            return make_response({"Error": "Unauthorized"}, 401)
+        return make_response({"Error": "Sign in to continue"}, 401)
+
+api.add_resource(CourseLessons, "/courses/<int:course_id>/lessons", endpoint="course_lessons")
+
+class CourseProgress(Resource):
+    def get(self, course_id):
+        token = request.headers.get("Authorization")
+
+        if not token:
+            return make_response({"Error": "Sign in to continue"}, 401)
+
+        auth_status = authorize(token[7:], [])
+
+        if not (isinstance(auth_status, dict) and auth_status.get("role") == "TEACHER"):
+            return make_response({"Error": "Unauthorized"}, 401)
+
+        progresses = (
+            db.session.query(Progress)
+            .join(Enrollment, Progress.enrollment_id == Enrollment._id)
+            .join(User, Enrollment.student_id == User.public_id)
+            .join(Course, Enrollment.course_id == Course._id)
+            .filter(Enrollment.course_id == course_id)
+            .all()
+        )
+
+        progresses_dict = []
+        for progress in progresses:
+            progress_dict = progress.to_dict()
+
+            progress_dict["enrollment"] = {
+                "student": {
+                    "name": progress.enrollment.student.name if progress.enrollment.student else "Unknown Student"
+                },
+                "course": {
+                    "title": progress.enrollment.course.title if progress.enrollment.course else "Unknown Course"
+                },
+                "completion_percentage": progress.enrollment.completion_percentage if progress.enrollment else 0
+            }
+
+            progresses_dict.append(progress_dict)
+
+        return make_response(progresses_dict, 200)
+
+
+api.add_resource(CourseProgress, "/courses/<int:course_id>/progress", endpoint="course_progress")
+
+class AdminEnrollments(Resource):
+
+    def get(self):
+        try:
+            # Retrieve Authorization Token
+            token = request.headers.get("Authorization")
+            if not token:
+                return make_response({"Error": "Sign in to continue"}, 401)
+
+            auth_status = authorize(token[7:], [])
+            if auth_status == 1:
+                return make_response({"Error": "You are not authorized to access this endpoint"}, 401)
+            elif auth_status in [2, 3, 4]:
+                return make_response({"Error": "Invalid Token"}, 401)
+
+            # Fetch Query Parameters for Filtering
+            student_id = request.args.get("student_id")
+            course_id = request.args.get("course_id")
+
+            query = (
+                db.session.query(
+                    Enrollment,
+                    User.name.label("student_name"),
+                    Course.title.label("course_title")
+                )
+                .join(User, Enrollment.student_id == User.public_id)
+                .join(Course, Enrollment.course_id == Course._id)
+            )
+
+            # Apply Filters
+            if student_id:
+                query = query.filter(Enrollment.student_id == student_id)
+            if course_id:
+                query = query.filter(Enrollment.course_id == course_id)
+
+            results = query.all()
+
+            if not results:
+                return make_response({"Error": "No enrollments found"}, 404)
+
+            # Format the Response
+            enrollments = []
+            for enrollment, student_name, course_title in results:
+                enrollment_dict = enrollment.to_dict()
+                enrollment_dict["student_name"] = student_name
+                enrollment_dict["course_title"] = course_title
+                enrollments.append(enrollment_dict)
+
+            # Filtering by Course, Calculate Analytics
+            if course_id:
+                total_students = len(enrollments)
+                total_completion = sum(enrollment["completion_percentage"] for enrollment in enrollments)
+                average_completion = (total_completion / total_students) if total_students > 0 else 0
+
+                analytics = {
+                    "total_students": total_students,
+                    "average_completion": f"{average_completion:.2f}%"
+                }
+
+                return make_response({
+                    "enrollments": enrollments,
+                    "analytics": analytics
+                }, 200)
+
+            return make_response(enrollments, 200)
+
+        except Exception as err:
+            print(f"Error in /enrollments endpoint: {err}")
+            return make_response({"Error": "Internal Server Error"}, 500)
+
+api.add_resource(AdminEnrollments, "/admin/enrollments", endpoint="admin_enrollments")
     
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
