@@ -41,8 +41,8 @@ def check_auth():
         return response 
 
     if request.path not in ["/", "/login", "/logout", "/signup", "/unauthCourses"]:
-        token = request.headers.get("Authorization")[7:]
-        if token:
+        if request.headers.get("Authorization")[7:]:
+            token = request.headers.get("Authorization")[7:]
             auth_status = authorize(token)
             if auth_status not in [1,2,3,4]:
                 user_id = jwt.decode(jwt = token, key = SECRET_KEY, algorithms="HS256")
