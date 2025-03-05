@@ -35,7 +35,7 @@ def check_auth():
 
     if request.method == 'OPTIONS':
         response = make_response({},200)
-        response.headers.set('Access-Control-Allow-Origin','https://superb-duckanoo-18547b.netlify.app')
+        response.headers.set('Access-Control-Allow-Origin','http://localhost:3000')
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST , PATCH, DELETE, OPTIONS')
         response.headers.set('Access-Control-Allow-Headers', ' Content-Type')
         return response 
@@ -56,8 +56,8 @@ def check_auth():
 
 @app.after_request
 def after_request(response):
-    response.headers['Access-Control-Allow-Origin'] = 'https://superb-duckanoo-18547b.netlify.app'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
     return response
@@ -253,15 +253,18 @@ class Enrollments(Resource):
             return make_response({"Error" : "You are not authorized to access this resource"}, 401)
             
         enrollments = Enrollment.query.all()
+        user = User.query.filter_by(public_id = auth_status.get("public_id")).first()
 
         if len(enrollments) > 0:
             if auth_status.get("role") == "STUDENT":
                 enrollments_dict = [enrollment.to_dict() for enrollment in enrollments if enrollment.student_id == auth_status.get("public_id")]
-                return enrollments_dict
+                if len(enrollments_dict) > 0:
+                    return make_response(enrollments_dict, 200)
+                return make_response({"Error" : "You have No Enrollments", "Name" : f"{user.name}"}, 404)
             enrollments_dict = [enrollment.to_dict() for enrollment in enrollments]
             return make_response(enrollments_dict, 200)
         
-        return make_response({"Error": "No users in Database"}, 404)
+        return make_response({"Error": "No Enrollments in Database"}, 404)
 
     # Create an Enrollment => ADMIN,STUDENT
     def post(self):
@@ -574,7 +577,7 @@ class Progresses(Resource):
     # Get all Progresses => ADMIN, STUDENT
     def get(self):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:],["TEACHER"])
+        auth_status = get_user(token[7:],[])
 
         if not auth_status:
             return make_response({"Error" : "You are not authorized to access this resource"}, 401)
@@ -1135,9 +1138,9 @@ class AssignmentSubmissions(Resource):
         
         submissions = AssignmentSubmission.query.all()
         
-        if len(submissions > 0):
+        if len(submissions) > 0:
             if auth_status.get("role") == "TEACHER":
-                submission_dict = [submission.to_dict() for submission in submissions for lesson in submission.lesson for course in lesson.courses if course.teacher_id == auth_status.get("public_id")]
+                submission_dict = [submission.to_dict() for submission in submissions if submission.lesson.course.teacher_id == auth_status.get("public_id")]
                 return make_response(submission_dict,200)
             
         return make_response({"Error" : "No submissions in database"})
@@ -1218,7 +1221,7 @@ class Discussions(Resource):
     # Get all discussions => ADMIN, TEACHER
     def get(self):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:], ["STUDENT"])
+        auth_status = get_user(token[7:], [])
 
         if not auth_status:
             return make_response({"Error" : "You are not authorized to access this resource"}, 401)

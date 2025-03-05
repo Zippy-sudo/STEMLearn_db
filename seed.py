@@ -79,7 +79,7 @@ with app.app_context():
     Course1 = Course(
                     title = "Bachelor of Science in Computer Science",
                     description = "This program focuses on the theory, development, and application of software and systems. It prepares students for careers in programming, software engineering, data analysis, cybersecurity, and more",
-                    subject = "Computers",
+                    subject = "Computer Science",
                     duration = 3,
                     teacher_id = User2.public_id,
                     created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
@@ -87,7 +87,7 @@ with app.app_context():
     Course2 = Course(
                     title = "Spinster of Science in Mechanical Engineering",
                     description = "This course covers the design, analysis, and manufacturing of mechanical systems and devices. Students learn to solve problems related to energy, materials, thermodynamics, and dynamics.",
-                    subject = "Physics",
+                    subject = "Engineering",
                     duration = 4,
                     created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                     )
@@ -108,7 +108,7 @@ with app.app_context():
     Course5 = Course(
                     title="Bachelor of Science in Data Science",
                     description="This course introduces students to data analytics, machine learning, and statistical methods. It prepares students to analyze large datasets and extract actionable insights for various industries.",
-                    subject="Data Science",
+                    subject="Mathematics",
                     duration=3,
                     created_at=(datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                     )

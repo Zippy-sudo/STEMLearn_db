@@ -155,7 +155,7 @@ class Progress(db.Model, SerializerMixin):
     lesson = db.relationship("Lesson", back_populates="progresses")
 
     # Serialization rules
-    serialize_rules = ('-enrollment.certificate', '-enrollment.progresses', '-lesson.course','-lesson.progresses')
+    serialize_rules = ('-enrollment.lessons', '-enrollment.student.quizzes','-enrollment.teacher','-enrollment.certificate','-enrollment.course.lessons', '-enrollment.course.teacher','-enrollment.progresses', '-lesson.assignment_submissions','-lesson.discussions', '-lesson.quizzes', '-lesson.resources', '-lesson.course','-lesson.progresses')
 
     def __repr__(self):
         return f"<Progress: {self._id}, Student: {self.enrollment.student.name}, Course: {self.enollment.course.title}, Lesson: {self.lesson._id}"
@@ -239,7 +239,7 @@ class AssignmentSubmission(db.Model, SerializerMixin):
     lesson = db.relationship("Lesson", back_populates="assignment_submissions")
 
     # Serialization Rules
-    serialize_only = ('_id', 'student_id', 'lesson_id', 'submission_text', 'file_url', 'submitted_at', 'teacher_feedback', 'grade', 'student.name', 'lesson.title')
+    serialize_only = ('_id', 'student_id', 'lesson_id', 'submission_text', 'file_url', 'submitted_at', 'teacher_feedback', 'grade', 'student.name', 'lesson.title', 'lesson.course')
 
     def __repr__(self):
         return f"<Submission: {self._id}, Student: {self.student.name}, Lesson: {self.lesson.title}>"
