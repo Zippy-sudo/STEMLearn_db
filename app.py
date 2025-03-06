@@ -628,7 +628,7 @@ class ProgressById(Resource):
     # Get a single Progress by Id => ADMIN
     def get(self, id):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:],["TEACHER", "STUDENT"])
+        auth_status = get_user(token[7:],["STUDENT"])
 
         if not auth_status:
             return make_response({"Error" : "You are not authorized to access this resource"}, 401)
@@ -1105,7 +1105,7 @@ class ResourceById(Resource):
                     if hasattr(resource, key):
                         setattr(resource, key, value)
                         db.session.commit()
-                return make_response(resource.to_dict(include_answers=True), 200)
+                return make_response(resource.to_dict(), 200)
             except ValueError as e:
                 db.session.rollback()
                 return make_response({"Error": f"{e}"}, 500)
@@ -1192,8 +1192,8 @@ class AssignmentSubmissionById(Resource):
         new_submission_data = request.get_json()
 
         if new_submission_data:
-            submission["teacher_feedback"] = new_submission_data["teacher_feedback"] if new_submission_data["teacher_feedback"] else None
-            submission["grade"] = new_submission_data["grade"] if new_submission_data["grade"] else None
+            submission.teacher_feedback = new_submission_data.get("teacher_feedback", None) #if new_submission_data["teacher_feedback"] else None
+            submission.grade = new_submission_data.get("grade", None) #if new_submission_data["grade"] #else None
             db.session.add(submission)
             db.session.commit()
             return make_response({"Success" : "Submission patched"}, 200)
@@ -1288,7 +1288,6 @@ class DiscussionById(Resource):
         return make_response({"Success": "Discussion deleted"}, 200)
     
 api.add_resource(DiscussionById, "/discussions/<int:id>", endpoint = "discussion_by_id")
-
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
