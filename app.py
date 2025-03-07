@@ -838,49 +838,57 @@ class QuizById(Resource):
     # Get a specific quiz => ADMIN, TEACHER, STUDENT
     def get(self, id):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:], [""])
+        if not token:
+            return make_response({"Error": "Authorization token is missing"}, 401)
 
+        auth_status = get_user(token[7:], [])
         if not auth_status:
-            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+            return make_response({"Error": "You are not authorized to access this resource"}, 401)
 
         quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with Id: {id}")
 
         if auth_status.get("role") == "STUDENT":
-            return make_response(quiz.to_dict(include_answers=False), 200)
+            quiz_dict = quiz.to_dict()
+            quiz_dict.pop("correct_answer", None)  # Remove correct_answer for students
+            return make_response(quiz_dict, 200)
         
-        return make_response(quiz.to_dict(include_answers=True), 200)
+        return make_response(quiz.to_dict(), 200)
 
     # Update a quiz => ADMIN, TEACHER
     def patch(self, id):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:], ["STUDENT"])
+        if not token:
+            return make_response({"Error": "Authorization token is missing"}, 401)
 
-        if not auth_status:
-            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+        auth_status = get_user(token[7:], ["STUDENT"])
+        if not auth_status or auth_status.get("role") not in ["ADMIN", "TEACHER"]:
+            return make_response({"Error": "You are not authorized to access this resource"}, 401)
 
         quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with Id: {id}")
         new_quiz_data = request.get_json()
 
-        if new_quiz_data:
-            try:
-                for key, value in new_quiz_data.items():
-                    if hasattr(quiz, key):
-                        setattr(quiz, key, value)
-                        db.session.commit()
-                return make_response(quiz.to_dict(include_answers=True), 200)
-            except ValueError as e:
-                db.session.rollback()
-                return make_response({"Error": f"{e}"}, 500)
-            
-        return make_response({"Error" : "Please enter Quiz data"}, 400)
+        if not new_quiz_data:
+            return make_response({"Error": "Please enter Quiz data"}, 400)
+
+        try:
+            for key, value in new_quiz_data.items():
+                if hasattr(quiz, key):
+                    setattr(quiz, key, value)
+            db.session.commit()
+            return make_response(quiz.to_dict(), 200)
+        except ValueError as e:
+            db.session.rollback()
+            return make_response({"Error": f"{e}"}, 500)
 
     # Attempt a quiz => STUDENT (Max 3 attempts per quiz, must complete all)
     def post(self, lesson_id, quiz_id):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:], ["ADMIN", "TEACHER"])
+        if not token:
+            return make_response({"Error": "Authorization token is missing"}, 401)
 
-        if not auth_status:
-            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+        auth_status = get_user(token[7:], ["ADMIN", "TEACHER"])
+        if not auth_status or auth_status.get("role") != "STUDENT":
+            return make_response({"Error": "You are not authorized to access this resource"}, 401)
 
         student_id = auth_status.get("public_id")
 
@@ -927,10 +935,12 @@ class QuizById(Resource):
     # Delete a quiz => ADMIN
     def delete(self, id):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
+        if not token:
+            return make_response({"Error": "Authorization token is missing"}, 401)
 
-        if not auth_status:
-            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
+        if not auth_status or auth_status.get("role") != "ADMIN":
+            return make_response({"Error": "You are not authorized to access this resource"}, 401)
 
         quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No Quiz found with ID: {id}")
 
@@ -940,7 +950,6 @@ class QuizById(Resource):
         return make_response({"Success": "Quiz deleted successfully"}, 200)
     
 api.add_resource(QuizById, "/quizzes/<int:id>", endpoint="quiz_by_id")
-
 
 # Activities
 class Activities(Resource):
