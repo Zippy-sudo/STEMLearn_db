@@ -774,24 +774,25 @@ class LessonById(Resource):
 api.add_resource(LessonById, "/lessons/<int:id>", endpoint="lesson_by_id")
 
 
-# Quizzes
 class Quizzes(Resource):
 
     # Get all quizzes => ADMIN, TEACHER, STUDENT
     def get(self):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:], [])
+        if not token:
+            return make_response({"Error": "Authorization token is missing"}, 401)
 
+        auth_status = get_user(token[7:], [])
         if not auth_status:
-            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+            return make_response({"Error": "You are not authorized to access this resource"}, 401)
 
         quizzes = Quiz.query.all()
 
         if len(quizzes) > 0:
             if auth_status.get("role") == "STUDENT":
-                quizzes_dict = [quiz.to_dict(include_answers=False) for quiz in quizzes]
+                quizzes_dict = [quiz.to_dict() for quiz in quizzes]
             else:
-                quizzes_dict = [quiz.to_dict(include_answers=True) for quiz in quizzes]
+                quizzes_dict = [quiz.to_dict() for quiz in quizzes]
 
             return make_response(quizzes_dict, 200)
         
@@ -800,13 +801,14 @@ class Quizzes(Resource):
     # Create a new quiz => ADMIN
     def post(self):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
+        if not token:
+            return make_response({"Error": "Authorization token is missing"}, 401)
 
-        if not auth_status:
-            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
+        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
+        if not auth_status or auth_status.get("role") != "ADMIN":
+            return make_response({"Error": "You are not authorized to access this resource"}, 401)
 
         new_quiz_data = request.get_json()
-
         if not new_quiz_data:
             return make_response({"Error": "Invalid data"}, 400)
 
@@ -817,11 +819,13 @@ class Quizzes(Resource):
                 question=new_quiz_data.get('question'),
                 options=new_quiz_data.get('options'),
                 correct_answer=new_quiz_data.get('correct_answer'),
+                attempts=0,  
+                correct=False,  
                 created_at=datetime.now(timezone.utc)
             )
             db.session.add(new_quiz)
             db.session.commit()
-            return make_response(new_quiz.to_dict(include_answers=True), 201)
+            return make_response(new_quiz.to_dict(), 201)
 
         except ValueError as e:
             db.session.rollback()
