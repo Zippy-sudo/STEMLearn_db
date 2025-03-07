@@ -1142,10 +1142,10 @@ api.add_resource(ResourceById, "/resources/<int:id>", endpoint='resources_by_id'
 # Assignment_submissions
 class AssignmentSubmissions(Resource):
 
-    # Get all submissions => ADMIN, TEACHER
+    # Get all submissions => ADMIN, TEACHER, STUDENT
     def get(self):
         token=request.headers.get("Authorization")
-        auth_status = get_user(token[7:], ["STUDENT"])
+        auth_status = get_user(token[7:], [])
 
         if not auth_status:
             return make_response({"Error" : "You are not authorized to access this resource"}, 401)
