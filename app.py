@@ -35,7 +35,7 @@ def check_auth():
 
     if request.method == 'OPTIONS':
         response = make_response({},200)
-        response.headers.set('Access-Control-Allow-Origin','https://superb-duckanoo-18547b.netlify.app')
+        response.headers.set('Access-Control-Allow-Origin','http://localhost:3000')
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST , PATCH, DELETE, OPTIONS')
         response.headers.set('Access-Control-Allow-Headers', ' Content-Type')
         return response 
@@ -881,7 +881,7 @@ class QuizById(Resource):
             return make_response({"Error": f"{e}"}, 500)
 
     # Attempt a quiz => STUDENT (Max 3 attempts per quiz, must complete all)
-    def post(self, lesson_id, quiz_id):
+    def post(self, id):
         token = request.headers.get("Authorization")
         if not token:
             return make_response({"Error": "Authorization token is missing"}, 401)
@@ -893,8 +893,8 @@ class QuizById(Resource):
         student_id = auth_status.get("public_id")
 
         # Fetch quiz
-        quiz = Quiz.query.filter_by(_id=quiz_id, lesson_id=lesson_id, student_id=student_id).first_or_404(
-            description=f"No Quiz found with ID: {quiz_id} for this lesson"
+        quiz = Quiz.query.filter_by(_id=id, student_id=student_id).first_or_404(
+            description=f"No Quiz found with ID: {id} for this student"
         )
 
         # Check max attempts per quiz
@@ -908,25 +908,27 @@ class QuizById(Resource):
         if user_answer is None:
             return make_response({"Error": "Answer is required"}, 400)
 
-        # Record the attempt
+        # Check if the answer is correct
+        is_correct = user_answer == quiz.correct_answer
+
+        # Update attempts and grade if correct
         quiz.attempts += 1
-        if user_answer == quiz.correct_answer:
-            quiz.correct = True  
+        if is_correct:
+            quiz.grade += 1  # Increment grade only if answer is correct
 
         db.session.commit()
 
         # Check if all quizzes in the lesson are completed
-        total_quizzes = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id).count()
-        completed_quizzes = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id, attempts__gt=0).count()
+        total_quizzes = Quiz.query.filter_by(lesson_id=quiz.lesson_id, student_id=student_id).count()
+        completed_quizzes = Quiz.query.filter_by(lesson_id=quiz.lesson_id, student_id=student_id).filter(Quiz.attempts > 0).count()
 
         if completed_quizzes == total_quizzes:
-            # Calculate Grade
-            correct_answers = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id, correct=True).count()
-            grade = (correct_answers / total_quizzes) * 100  
+            # Calculate final grade as a percentage
+            final_grade = (quiz.grade / total_quizzes) * 100  
 
             return make_response({
                 "Success": "All quizzes completed!",
-                "Grade": f"{grade:.2f}%",
+                "Final Grade": f"{final_grade:.2f}%",
                 "Message": "You can retry to improve your score if you have attempts left."
             }, 200)
 
