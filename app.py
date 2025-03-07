@@ -737,7 +737,7 @@ class LessonById(Resource):
     # Update a lesson => ADMIN, TEACHER
     def patch(self, id):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:], ["ADMIN", "TEACHER"])
+        auth_status = get_user(token[7:], ["STUDENT"])
 
         if not auth_status:
             return make_response({"Error" : "You are not authorized to access this resource"}, 401)
@@ -761,7 +761,7 @@ class LessonById(Resource):
     # Delete a lesson => ADMIN
     def delete(self, id):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:], ["ADMIN"])
+        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
 
         if not auth_status:
             return make_response({"Error" : "You are not authorized to access this resource"}, 401)
