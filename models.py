@@ -179,7 +179,7 @@ class Quiz(db.Model, SerializerMixin):
     student = db.relationship("User", back_populates="quizzes")
 
     # Serialization rules
-    serialize_rules = ('-lesson.quizzes', '-student.quizzes')
+    serialize_rules = ('-student.enrollments','-student.discussions','-student.assignment_submissions','-lesson.resources','-lesson.progresses','-lesson.discussions','-lesson.quizzes', '-lesson.course.teacher','-lesson.assignment_submissions', '-student.quizzes')
 
     def __repr__(self):
         return f"<Lesson {self.title}, Lesson: {self.lesson.title}>"

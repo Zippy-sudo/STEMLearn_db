@@ -35,7 +35,8 @@ def check_auth():
 
     if request.method == 'OPTIONS':
         response = make_response({},200)
-        response.headers.set('Access-Control-Allow-Origin','https://superb-duckanoo-18547b.netlify.app')
+        response.headers.set('Access-Control-Allow-Origin','https://superb-duckanoo-18547b.netlify.app'
+)
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST , PATCH, DELETE, OPTIONS')
         response.headers.set('Access-Control-Allow-Headers', ' Content-Type')
         return response 
@@ -881,7 +882,7 @@ class QuizById(Resource):
             return make_response({"Error": f"{e}"}, 500)
 
     # Attempt a quiz => STUDENT (Max 3 attempts per quiz, must complete all)
-    def post(self, lesson_id, quiz_id):
+    def post(self, id):
         token = request.headers.get("Authorization")
         if not token:
             return make_response({"Error": "Authorization token is missing"}, 401)
@@ -893,8 +894,8 @@ class QuizById(Resource):
         student_id = auth_status.get("public_id")
 
         # Fetch quiz
-        quiz = Quiz.query.filter_by(_id=quiz_id, lesson_id=lesson_id, student_id=student_id).first_or_404(
-            description=f"No Quiz found with ID: {quiz_id} for this lesson"
+        quiz = Quiz.query.filter_by(_id=id, student_id=student_id).first_or_404(
+            description=f"No Quiz found with ID: {id} for this lesson"
         )
 
         # Check max attempts per quiz
@@ -916,8 +917,8 @@ class QuizById(Resource):
         db.session.commit()
 
         # Check if all quizzes in the lesson are completed
-        total_quizzes = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id).count()
-        completed_quizzes = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id, attempts__gt=0).count()
+        # total_quizzes = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id).count()
+        # completed_quizzes = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id, attempts > 0).count()
 
         if completed_quizzes == total_quizzes:
             # Calculate Grade
@@ -1156,6 +1157,9 @@ class AssignmentSubmissions(Resource):
             if auth_status.get("role") == "TEACHER":
                 submission_dict = [submission.to_dict() for submission in submissions if submission.lesson.course.teacher_id == auth_status.get("public_id")]
                 return make_response(submission_dict,200)
+            elif auth_status.get("role") == "STUDENT":
+                submission_dict = [submission.to_dict() for submission in submissions if submission.student_id == auth_status.get("public_id")]
+                return make_response(submission_dict,200)
             submission_dict=[submission.to_dict() for submission in submissions]
             return make_response(submission_dict, 200)
             
@@ -1177,7 +1181,7 @@ class AssignmentSubmissions(Resource):
 
             if len(previous_submissions) < 3:
                 try:
-                    new_submission = AssignmentSubmission(student_id = new_submission_data.get("student_id"), lesson_id = new_submission_data.get("lesson_id"), submission_text = new_submission_data.get("submission_text") if new_submission_data.get("submission_text") else None, file_url = new_submission_data.get("file_url"), submitted_at= (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+                    new_submission = AssignmentSubmission(student_id = auth_status.get("public_id"), lesson_id = new_submission_data.get("lesson_id"), submission_text = new_submission_data.get("submission_text") if new_submission_data.get("submission_text") else None, file_url = new_submission_data.get("file_url"), submitted_at= (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
                     db.session.add(new_submission)
                     db.session.commit()
                     return make_response({"Success" : "Submission submitted"}, 201)
