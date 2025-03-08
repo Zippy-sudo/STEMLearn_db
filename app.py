@@ -35,10 +35,10 @@ def check_auth():
 
     if request.method == 'OPTIONS':
         response = make_response({},200)
-        response.headers.set('Access-Control-Allow-Origin','https://superb-duckanoo-18547b.netlify.app'
-)
+        response.headers.set('Access-Control-Allow-Origin','http://localhost:3000')
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST , PATCH, DELETE, OPTIONS')
         response.headers.set('Access-Control-Allow-Headers', ' Content-Type')
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
         return response 
 
     if request.path not in ["/", "/login", "/logout", "/signup", "/unauthCourses"]:
@@ -58,7 +58,7 @@ def check_auth():
 
 @app.after_request
 def after_request(response):
-    response.headers['Access-Control-Allow-Origin'] = 'https://superb-duckanoo-18547b.netlify.app'
+    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -1312,4 +1312,4 @@ class DiscussionById(Resource):
 api.add_resource(DiscussionById, "/discussions/<int:id>", endpoint = "discussion_by_id")
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(port=5555, debug=True)
