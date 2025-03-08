@@ -798,14 +798,15 @@ class Quizzes(Resource):
         
         return make_response({"Error": "No quizzes found"}, 404)
 
-    # Create a new quiz => ADMIN
+    # Create a new quiz => ADMIN, TEACHER
     def post(self):
         token = request.headers.get("Authorization")
         if not token:
             return make_response({"Error": "Authorization token is missing"}, 401)
 
-        auth_status = get_user(token[7:], ["TEACHER", "STUDENT"])
-        if not auth_status or auth_status.get("role") != "ADMIN":
+      
+        auth_status = get_user(token[7:], ["STUDENT"])
+        if not auth_status or auth_status.get("role") not in ["ADMIN", "TEACHER"]:
             return make_response({"Error": "You are not authorized to access this resource"}, 401)
 
         new_quiz_data = request.get_json()
@@ -820,8 +821,8 @@ class Quizzes(Resource):
                 options=new_quiz_data.get('options'),
                 correct_answer=new_quiz_data.get('correct_answer'),
                 attempts=0,  
-                correct=False,  
-                created_at=datetime.now(timezone.utc)
+                grade=0, 
+                due_date=datetime.now(timezone.utc)
             )
             db.session.add(new_quiz)
             db.session.commit()
@@ -830,9 +831,9 @@ class Quizzes(Resource):
         except ValueError as e:
             db.session.rollback()
             return make_response({"Error": f"{e}"}, 500)
-        
+    
 api.add_resource(Quizzes, "/quizzes", endpoint="quizzes")
-        
+
 class QuizById(Resource):
 
     # Get a specific quiz => ADMIN, TEACHER, STUDENT
