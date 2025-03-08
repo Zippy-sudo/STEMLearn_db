@@ -599,10 +599,10 @@ class Progresses(Resource):
     
         return make_response({"Error": "No progresses in Database"}, 404)
     
-    # Create a Progress => ADMIN
+    # Create a Progress => ADMIN, STUDENT
     def post(self):
         token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:],["TEACHER", "STUDENT"])
+        auth_status = get_user(token[7:],["TEACHER"])
 
         if not auth_status:
             return make_response({"Error" : "You are not authorized to access this resource"}, 401)
@@ -895,7 +895,7 @@ class QuizById(Resource):
 
         # Fetch quiz
         quiz = Quiz.query.filter_by(_id=id, student_id=student_id).first_or_404(
-            description=f"No Quiz found with ID: {id} for this lesson"
+            description=f"No Quiz found with ID: {id} for this student"
         )
 
         # Check max attempts per quiz
@@ -909,25 +909,27 @@ class QuizById(Resource):
         if user_answer is None:
             return make_response({"Error": "Answer is required"}, 400)
 
-        # Record the attempt
+        # Check if the answer is correct
+        is_correct = user_answer == quiz.correct_answer
+
+        # Update attempts and grade if correct
         quiz.attempts += 1
-        if user_answer == quiz.correct_answer:
-            quiz.correct = True  
+        if is_correct:
+            quiz.grade += 1  # Increment grade only if answer is correct
 
         db.session.commit()
 
         # Check if all quizzes in the lesson are completed
-        # total_quizzes = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id).count()
-        # completed_quizzes = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id, attempts > 0).count()
+        total_quizzes = Quiz.query.filter_by(lesson_id=quiz.lesson_id, student_id=student_id).count()
+        completed_quizzes = Quiz.query.filter_by(lesson_id=quiz.lesson_id, student_id=student_id).filter(Quiz.attempts > 0).count()
 
         if completed_quizzes == total_quizzes:
-            # Calculate Grade
-            correct_answers = Quiz.query.filter_by(lesson_id=lesson_id, student_id=student_id, correct=True).count()
-            grade = (correct_answers / total_quizzes) * 100  
+            # Calculate final grade as a percentage
+            final_grade = (quiz.grade / total_quizzes) * 100  
 
             return make_response({
                 "Success": "All quizzes completed!",
-                "Grade": f"{grade:.2f}%",
+                "Final Grade": f"{final_grade:.2f}%",
                 "Message": "You can retry to improve your score if you have attempts left."
             }, 200)
 
@@ -1143,10 +1145,10 @@ api.add_resource(ResourceById, "/resources/<int:id>", endpoint='resources_by_id'
 # Assignment_submissions
 class AssignmentSubmissions(Resource):
 
-    # Get all submissions => ADMIN, TEACHER
+    # Get all submissions => ADMIN, TEACHER, STUDENT
     def get(self):
         token=request.headers.get("Authorization")
-        auth_status = get_user(token[7:], ["STUDENT"])
+        auth_status = get_user(token[7:], [])
 
         if not auth_status:
             return make_response({"Error" : "You are not authorized to access this resource"}, 401)
@@ -1309,4 +1311,4 @@ class DiscussionById(Resource):
 api.add_resource(DiscussionById, "/discussions/<int:id>", endpoint = "discussion_by_id")
 
 if __name__ == '__main__':
-    app.run(port=5555, debug=True)
+    app.run(port=5000, debug=True)
