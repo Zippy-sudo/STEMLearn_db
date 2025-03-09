@@ -2,7 +2,7 @@ from app import app
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 
-from models import db, User, Enrollment, Course, Certificate, Lesson, Quiz, Progress, Activity, LessonResource, AssignmentSubmission, Discussion
+from models import db, User, Enrollment, Course, Certificate, Lesson, Quiz, Question, Progress, Activity, LessonResource, AssignmentSubmission, Discussion, QuizAttempt
 
 with app.app_context():
 
@@ -14,6 +14,8 @@ with app.app_context():
     Lesson.query.delete()
     Progress.query.delete()
     Quiz.query.delete()
+    Question.query.delete()
+    QuizAttempt.query.delete()
     Activity.query.delete()
     LessonResource.query.delete()
 
@@ -428,53 +430,40 @@ with app.app_context():
     
     print("Generating Quizzes...")
 
-    quizzes = [
-        Quiz(
-            lesson_id=Lesson1._id,
-            student_id=User3.public_id,
-            question="What does CRUD stand for?",
-            options=["Create, Read, Update, Delete", "Copy, Retrieve, Update, Destroy"],
-            correct_answer="Create, Read, Update, Delete",
-            attempts=0,
-            due_date=(datetime.now(timezone.utc) + timedelta(days = 7)).strftime("%d/%m/%Y")
-        ),
-        Quiz(
-            lesson_id=Lesson2._id,
-            student_id=User3.public_id,
-            question="Which HTTP method is used for the 'Create' operation in RESTful APIs?",
-            options=["GET", "POST", "PUT", "DELETE"],
-            correct_answer="POST",
-            attempts=0,
-            due_date=(datetime.now(timezone.utc) + timedelta(days = 7)).strftime("%d/%m/%Y")
-        ),
-        Quiz(
-            lesson_id=Lesson3._id,
-            student_id=User3.public_id,
-            question="Which SQL command is used for the 'Read' operation?",
-            options=["SELECT", "INSERT", "UPDATE", "DELETE"],
-            correct_answer="SELECT",
-            attempts=0,
-            due_date=(datetime.now(timezone.utc) + timedelta(days = 7)).strftime("%d/%m/%Y")
-        ),
-        Quiz(
-            lesson_id=Lesson4._id,
-            student_id=User5.public_id,
-            question="What is the purpose of the 'Delete' operation in CRUD?",
-            options=[
-                "To add new data to the database",
-                "To retrieve data from the database",
-                "To modify existing data in the database",
-                "To remove data from the database"
-            ],
-            correct_answer="To remove data from the database",
-            attempts=0,
-            due_date=(datetime.now(timezone.utc) + timedelta(days = 7)).strftime("%d/%m/%Y")
-        )
-    ]
+    Quiz1 = Quiz(lesson_id = Lesson1._id, due_date=(datetime.now(timezone.utc) + timedelta(days = 7)).strftime("%d/%m/%Y"))
+    db.session.add(Quiz1)
+    db.session.commit()
+
+    Question1 = Question(quiz_id=Quiz1._id,
+                         question = "Which HTTP method is used for the 'Create' operation in RESTful APIs?",
+                         option1 = "GET",
+                         option2 = "DELETE",
+                         option3 = "PUT",
+                         option4 = "POST",
+                         correct_answer = "POST"
+                         )
+    Question2 = Question(
+                         quiz_id=Quiz1._id,
+                         question = "Which SQL command is used for the 'Read' operation?",
+                         option1 = "SELECT",
+                         option2 = "DELETE",
+                         option3 = "INSERT",
+                         option4 = "UPDATE",
+                         correct_answer = "SELECT"
+                        )
+    Question3 = Question(
+                         quiz_id=Quiz1._id,
+                         question = "What is the purpose of the 'Delete' operation in CRUD?",
+                         option1 = "To add new data to the database",
+                         option2 = "To retrieve data from the database",
+                         option3 = "To modify existing data in the database",
+                         option4 = "To remove data from the database",
+                         correct_answer = "To remove data from the database"
+                        )
 
     Activity5 = Activity(user_id=User1.public_id,action="Creating Quizzes", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
 
-    db.session.add_all(quizzes)
+    db.session.add_all([Question1, Question2, Question3])
     db.session.add(Activity5)
     db.session.commit()
     

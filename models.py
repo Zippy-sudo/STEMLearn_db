@@ -21,13 +21,13 @@ class User(db.Model, SerializerMixin):
     courses = association_proxy("enrollments", "course", creator=lambda course_obj: Enrollment(course=course_obj))
     courses_taught = db.relationship("Course", back_populates="teacher")
     certificates = association_proxy("enrollments", "certificate", creator=lambda certificate_obj : Certificate(certificate=certificate_obj))
-    quizzes = db.relationship("Quiz", back_populates="student", cascade="all, delete-orphan")
+    quiz_attempts = db.relationship("QuizAttempt", back_populates="student", cascade="all, delete-orphan")
     activities = db.relationship("Activity", back_populates="user", cascade="all, delete-orphan")
     assignment_submissions = db.relationship("AssignmentSubmission", back_populates="student", cascade="all, delete-orphan")
     discussions = db.relationship("Discussion", back_populates="user")
     
     # Serialization rules
-    serialize_rules = ('-_password_hash', '-enrollments.student', '-courses.enrollments', '-courses.students', '-courses.certificates', '-courses.lessons', '-certificates.enrollment', '-certificates.course', '-quizzes.student', '-quizzes.lesson', '-courses_taught.enrollments','-courses_taught.certificates', '-courses_taught.lessons', '-courses_taught.teacher', "-courses_taught.students", '-activities', '-assignment_submissions.student', '-discussions.user')
+    serialize_rules = ('-_password_hash', '-enrollments.student', '-courses.enrollments', '-courses.students', '-courses.certificates', '-courses.lessons', '-certificates.enrollment', '-certificates.course', '-quiz_attempts.student', '-courses_taught.enrollments','-courses_taught.certificates', '-courses_taught.lessons', '-courses_taught.teacher', "-courses_taught.students", '-activities', '-assignment_submissions.student', '-discussions.user')
 
     def __repr__(self):
         return f'<User {self._id}, Name: {self.name}, Role: {self.role}>'
@@ -166,23 +166,51 @@ class Quiz(db.Model, SerializerMixin):
 
     _id = db.Column(db.Integer, primary_key=True)
     lesson_id = db.Column(db.Integer, db.ForeignKey("lessons._id"), nullable=False)
-    student_id = db.Column(db.String, db.ForeignKey("users.public_id"), nullable=False)
-    question = db.Column(db.Text, nullable=False)
-    options = db.Column(db.JSON, nullable=False)  
-    correct_answer = db.Column(db.String, nullable=False)
-    attempts = db.Column(db.Integer, default=0)
-    grade = db.Column(db.Integer, default=0)
     due_date = db.Column(db.String, nullable=False)
 
     # Relationships
     lesson = db.relationship("Lesson", back_populates="quizzes")
-    student = db.relationship("User", back_populates="quizzes")
-
+    questions = db.relationship("Question", back_populates="quiz")
+    quiz_attempts = db.relationship("QuizAttempt", back_populates="quiz", cascade="all, delete-orphan")
+    
     # Serialization rules
-    serialize_rules = ('-student.enrollments','-student.discussions','-student.assignment_submissions','-lesson.resources','-lesson.progresses','-lesson.discussions','-lesson.quizzes', '-lesson.course.teacher','-lesson.assignment_submissions', '-student.quizzes')
+    serialize_rules = ('-questions.quiz', '-quiz_attempts.student','-quiz_attempts.quiz','-lesson.resources','-lesson.progresses','-lesson.discussions','-lesson.quizzes', '-lesson.course.teacher','-lesson.assignment_submissions')
 
     def __repr__(self):
         return f"<Lesson {self.title}, Lesson: {self.lesson.title}>"
+    
+
+# Questions
+class Question(db.Model, SerializerMixin):
+    __tablename__ = "questions"
+
+    _id = db.Column(db.Integer, primary_key=True)
+    quiz_id = db.Column(db.Integer, db.ForeignKey("quizzes._id"))
+    question = db.Column(db.String, nullable=False)
+    option1 = db.Column(db.String, nullable=False)
+    option2 = db.Column(db.String, nullable=False)
+    option3 = db.Column(db.String, nullable=False)
+    option4 = db.Column(db.String, nullable=False)
+    correct_answer = db.Column(db.String, nullable=False)
+
+    quiz = db.relationship("Quiz", back_populates="questions")
+
+    serialize_rules=('-quiz',)
+
+# Quiz Attempts
+class QuizAttempt(db.Model, SerializerMixin):
+    __tablename__ = "quizattempts"
+
+    _id = db.Column(db.Integer, primary_key=True)
+    quiz_id = db.Column(db.Integer, db.ForeignKey("quizzes._id"),nullable=False)
+    student_id = db.Column(db.String, db.ForeignKey("users.public_id"),nullable=False)
+    grade = db.Column(db.Integer, default=0)
+
+    student = db.relationship('User', back_populates="quiz_attempts")
+    quiz = db.relationship('Quiz', back_populates="quiz_attempts")
+
+    serialize_rules=('-quiz', '-student.quiz_attempts')
+
     
 # Resource Table
 class LessonResource(db.Model, SerializerMixin):
