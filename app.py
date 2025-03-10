@@ -433,7 +433,9 @@ class CourseById(Resource):
             try:
                 for key, value in new_course_data.items():
                     if key != "_id":
-                        if hasattr(course, key):
+                        if key == "duration":
+                            course.duration = int(value)
+                        elif hasattr(course, key):
                             setattr(course, key, value)
                             db.session.commit()
                 return make_response(course.to_dict(), 200)
@@ -447,7 +449,9 @@ class CourseById(Resource):
         try:
             for key, value in new_course_data.items():
                 if key != "_id":
-                    if hasattr(course, key):
+                    if key == "duration":
+                        course.duration = int(value)
+                    elif hasattr(course, key):
                         setattr(course, key, value)
                         db.session.commit()
             return make_response(course.to_dict(), 200)
