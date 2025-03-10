@@ -77,7 +77,7 @@ class Course(db.Model, SerializerMixin):
     description = db.Column(db.Text, nullable=False)
     subject = db.Column(db.String, nullable=False)
     duration = db.Column(db.Integer, nullable=False)  
-    teacher_id = db.Column(db.String, db.ForeignKey('users.public_id'), nullable=True)
+    public_id = db.Column(db.String, db.ForeignKey('users.public_id'), nullable=True)
     created_at = db.Column(db.String, nullable=False)
 
     # Relationships

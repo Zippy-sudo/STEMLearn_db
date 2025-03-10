@@ -83,7 +83,7 @@ with app.app_context():
                     description = "This program focuses on the theory, development, and application of software and systems. It prepares students for careers in programming, software engineering, data analysis, cybersecurity, and more",
                     subject = "Computer Science",
                     duration = 3,
-                    teacher_id = User2.public_id,
+                    public_id = User2.public_id,
                     created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                     )
     Course2 = Course(

@@ -33,7 +33,7 @@ def check_auth():
 
     if request.method == 'OPTIONS':
         response = make_response({},200)
-        response.headers.set('Access-Control-Allow-Origin','https://superb-duckanoo-18547b.netlify.app')
+        response.headers.set('Access-Control-Allow-Origin','http://localhost:3000')
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST , PATCH, DELETE, OPTIONS')
         response.headers.set('Access-Control-Allow-Headers', ' Content-Type')
         response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -55,7 +55,7 @@ def check_auth():
 
 @app.after_request
 def after_request(response):
-    response.headers['Access-Control-Allow-Origin'] = 'https://superb-duckanoo-18547b.netlify.app'
+    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -148,7 +148,7 @@ class Users(Resource):
             
         if len(users) > 0:
             if (auth_status.get("role") == "TEACHER"):
-                    my_students_dict = [user.to_dict(only = ('name','enrollments')) for user in users for course in user.courses if course.teacher_id == auth_status.get("public_id")]
+                    my_students_dict = [user.to_dict(only = ('name','enrollments')) for user in users for course in user.courses if course.public_id == auth_status.get("public_id")]
                     return make_response(my_students_dict, 200)
             
             users_dict = [user.to_dict() for user in users]
@@ -588,7 +588,7 @@ class Progresses(Resource):
                 my_progresses_dict = [progress.to_dict() for progress in progresses if progress.enrollment.student_id == auth_status.get("public_id")]
                 return make_response(my_progresses_dict,200)
             elif auth_status.get("role") == "TEACHER":
-                my_progresses_dict = [progress.to_dict() for progress in progresses if progress.enrollment.course.teacher_id == auth_status.get("public_id")]
+                my_progresses_dict = [progress.to_dict() for progress in progresses if progress.enrollment.course.public_id == auth_status.get("public_id")]
                 return make_response(my_progresses_dict,200)
             
             progresses_dict = [progress.to_dict() for progress in progresses]
@@ -1023,7 +1023,7 @@ class Activities(Resource):
 
         if len(activities) > 0:
             if auth_status.get("role") == "TEACHER":
-                activities_dict = [activity.to_dict(only = ('_id','action', 'timestamp', 'user.name')) for activity in activities for course in activity.user.courses if activity.user_id != auth_status.get("public_id") and activity.user_id not in admins and course.teacher_id == auth_status.get("public_id")]
+                activities_dict = [activity.to_dict(only = ('_id','action', 'timestamp', 'user.name')) for activity in activities for course in activity.user.courses if activity.user_id != auth_status.get("public_id") and activity.user_id not in admins and course.public_id == auth_status.get("public_id")]
                 return make_response([activities_dict],200)
             
             activities_dict = [activity.to_dict(only = ('_id', 'action', 'timestamp', 'user.name')) for activity in activities]
@@ -1209,7 +1209,7 @@ class AssignmentSubmissions(Resource):
         
         if len(submissions) > 0:
             if auth_status.get("role") == "TEACHER":
-                submission_dict = [submission.to_dict() for submission in submissions if submission.lesson.course.teacher_id == auth_status.get("public_id")]
+                submission_dict = [submission.to_dict() for submission in submissions if submission.lesson.course.public_id == auth_status.get("public_id")]
                 return make_response(submission_dict,200)
             elif auth_status.get("role") == "STUDENT":
                 submission_dict = [submission.to_dict() for submission in submissions if submission.student_id == auth_status.get("public_id")]
@@ -1231,11 +1231,14 @@ class AssignmentSubmissions(Resource):
 
         if new_submission_data:
 
-            previous_submissions = AssignmentSubmission.query.filter_by(student_id = auth_status.get("public_id"), lesson_id = new_submission_data.lesson_id).all()
+            previous_submissions = AssignmentSubmission.query.filter_by(student_id = auth_status.get("public_id"), lesson_id = new_submission_data.get("lesson_id")).all()
 
             if len(previous_submissions) < 3:
                 try:
+                    enrollment = Enrollment.query.join(Course).join(Lesson).filter(Lesson._id == new_submission_data.get("lesson_id")).first()
+                    new_progress = Progress(enrollment_id = enrollment._id, lesson_id = new_submission_data.get("lesson_id"), completed_on = (datetime.now(timezone.utc)).strftime("%d/%m/%Y"))
                     new_submission = AssignmentSubmission(student_id = auth_status.get("public_id"), lesson_id = new_submission_data.get("lesson_id"), submission_text = new_submission_data.get("submission_text") if new_submission_data.get("submission_text") else None, file_url = new_submission_data.get("file_url"), submitted_at= (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+                    db.session.add(new_progress)
                     db.session.add(new_submission)
                     db.session.commit()
                     return make_response({"Success" : "Submission submitted"}, 201)
@@ -1340,7 +1343,7 @@ class DiscussionById(Resource):
             return make_response(discussion.to_dict(), 200)
         elif auth_status.get("role") == "TEACHER":
             discussion = Discussion.query.filter_by(_id = id).first_or_404(description=f"No discussion belonging to this user with Id : {id}")
-            discussion_dict = discussion.to_dict() if discussion.lesson.course.teacher_id == auth_status.get("public_id") else {"Error" : "No discussion found"}
+            discussion_dict = discussion.to_dict() if discussion.lesson.course.public_id == auth_status.get("public_id") else {"Error" : "No discussion found"}
             return make_response(discussion_dict, 200)
         
         discussion = Discussion.query.filter_by(_id = id).first()
