@@ -432,7 +432,7 @@ class CourseById(Resource):
         
             try:
                 for key, value in new_course_data.items():
-                    if (key != "_id"):
+                    if key != "_id":
                         if hasattr(course, key):
                             setattr(course, key, value)
                             db.session.commit()
@@ -446,7 +446,7 @@ class CourseById(Resource):
         
         try:
             for key, value in new_course_data.items():
-                if (key != "_id"):
+                if key != "_id":
                     if hasattr(course, key):
                         setattr(course, key, value)
                         db.session.commit()
