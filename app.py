@@ -360,7 +360,7 @@ class Courses(Resource):
                 courses_dict = [course.to_dict(rules = ('-students',)) for course in courses]
                 return make_response(courses_dict, 200)
             elif auth_status.get("role") == "TEACHER":
-                courses_dict = [course.to_dict() for course in courses if course.teacher_id == auth_status.get("public_id")]
+                courses_dict = [course.to_dict() for course in courses if course.public_id == auth_status.get("public_id")]
                 return make_response(courses_dict, 200)
         
             courses_dict = [course.to_dict() for course in courses]
