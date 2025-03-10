@@ -412,7 +412,7 @@ class CourseById(Resource):
             course = Course.query.filter_by(_id = id).first_or_404(description=f"No Course with Id: {id}")
             return make_response(course.to_dict(rules = ('-students',)), 200)
         elif auth_status.get("role") == "TEACHER":
-            course = Course.query.filter_by(_id = id, teacher_id = auth_status.get("public_id")).first_or_404(description=f"None of your Courses with Id: {id}")
+            course = Course.query.filter_by(_id = id, public_id = auth_status.get("public_id")).first_or_404(description=f"None of your Courses with Id: {id}")
             return make_response(course.to_dict(), 200)
         
         course = Course.query.filter_by(_id = id).first_or_404(description=f"No Course with Id: {id}")
@@ -427,7 +427,7 @@ class CourseById(Resource):
             return make_response({"Error" : "You are not authorized to access this resource"}, 401)
         
         if auth_status.get("role") == "TEACHER":
-            course = Course.query.filter_by(_id = id, teacher_id = auth_status.get("public_id")).first_or_404(description=f"None of your Courses with Id: {id}")
+            course = Course.query.filter_by(_id = id, public_id = auth_status.get("public_id")).first_or_404(description=f"None of your Courses with Id: {id}")
             new_course_data = request.get_json()
         
             try:
