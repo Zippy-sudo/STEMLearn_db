@@ -386,7 +386,7 @@ class Courses(Resource):
                                 description = new_course_data.get('description'),
                                 subject = new_course_data.get('subject'),
                                 duration = new_course_data.get('duration'),
-                                teacher_id = new_course_data.get('public_id') if hasattr(new_course_data, "public_id") else '',
+                                public_id = new_course_data.get('public_id') if hasattr(new_course_data, "public_id") else '',
                                 created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                                 )
             db.session.add(new_course)
