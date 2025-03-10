@@ -86,8 +86,6 @@ class Course(db.Model, SerializerMixin):
     teacher = db.relationship("User", back_populates="courses_taught")
     certificates = association_proxy('enrollments', "certificate", creator=lambda certificate_obj: Certificate(certificate=certificate_obj))
     lessons = db.relationship("Lesson", back_populates="course", cascade="all, delete-orphan")
-    
-    teacher = db.relationship('User', back_populates='courses_taught')
 
     # Serialization rules
     serialize_rules = ('-enrollments.student' ,'-enrollments.course', '-enrollments.certificate', '-enrollments.progresses', '-students.enrollments', '-students.courses', '-students.certificates', '-certificates', '-lessons.course', '-lessons.progresses', '-teacher.courses', '-teacher.certificates', '-teacher.enrollments')

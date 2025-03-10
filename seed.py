@@ -16,6 +16,8 @@ with app.app_context():
     Quiz.query.delete()
     Question.query.delete()
     QuizAttempt.query.delete()
+    AssignmentSubmission.query.delete()
+    Discussion.query.delete()
     Activity.query.delete()
     LessonResource.query.delete()
 
@@ -91,6 +93,7 @@ with app.app_context():
                     description = "This course covers the design, analysis, and manufacturing of mechanical systems and devices. Students learn to solve problems related to energy, materials, thermodynamics, and dynamics.",
                     subject = "Engineering",
                     duration = 4,
+                    public_id = User7.public_id,
                     created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                     )
     Course3 = Course(
@@ -98,6 +101,7 @@ with app.app_context():
                     description = "This course focuses on the study of the environment and the impact of human activities on natural systems. It equips students with the knowledge to address environmental challenges and promote sustainability.",
                     subject = "Biology",
                     duration =  3,
+                    public_id = User7.public_id,
                     created_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                     )
     Course4 = Course(
@@ -105,6 +109,7 @@ with app.app_context():
                     description="This course delves into the study of matter, energy, and the forces of nature. Topics include classical mechanics, electromagnetism, quantum physics, and thermodynamics.",
                     subject="Physics",
                     duration=3,
+                    public_id = User2.public_id,
                     created_at=(datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                     )
     Course5 = Course(
@@ -112,6 +117,7 @@ with app.app_context():
                     description="This course introduces students to data analytics, machine learning, and statistical methods. It prepares students to analyze large datasets and extract actionable insights for various industries.",
                     subject="Mathematics",
                     duration=3,
+                    public_id = User1.public_id,
                     created_at=(datetime.now(timezone.utc)).strftime("%d/%m/%Y")
                     )
     
