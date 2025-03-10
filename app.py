@@ -446,9 +446,10 @@ class CourseById(Resource):
         
         try:
             for key, value in new_course_data.items():
-                if hasattr(course, key):
-                    setattr(course, key, value)
-                    db.session.commit()
+                if (key != "_id"):
+                    if hasattr(course, key):
+                        setattr(course, key, value)
+                        db.session.commit()
             return make_response(course.to_dict(), 200)
         except Exception as e:
             db.session.rollback()
