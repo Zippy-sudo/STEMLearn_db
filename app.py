@@ -437,7 +437,7 @@ class CourseById(Resource):
                             course.duration = int(value)
                         elif hasattr(course, key):
                             setattr(course, key, value)
-                            db.session.commit()
+                db.session.commit()
                 return make_response(course.to_dict(), 200)
             except Exception as e:
                 db.session.rollback()
@@ -453,7 +453,7 @@ class CourseById(Resource):
                         course.duration = int(value)
                     elif hasattr(course, key):
                         setattr(course, key, value)
-                        db.session.commit()
+            db.session.commit()
             return make_response(course.to_dict(), 200)
         except Exception as e:
             db.session.rollback()
