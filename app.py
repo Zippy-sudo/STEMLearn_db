@@ -483,7 +483,7 @@ class Certificates(Resource):
         
         if len(certificates) > 0:
             if auth_status.get("role") == "STUDENT":
-                my_certificates_dict = [certificate.to_dict(rules = ('-student._id', '-student.created_at' )) for certificate in certificates if certificate.student_id == auth_status.get("public_id")]
+                my_certificates_dict = [certificate.to_dict(rules = ('-student._id', '-student.created_at' )) for certificate in certificates if certificate.enrollment.student_id == auth_status.get("public_id")]
                 return make_response(my_certificates_dict,200)
             
             certificates_dict = [certificate.to_dict() for certificate in certificates]
