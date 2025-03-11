@@ -131,7 +131,7 @@ class Lesson(db.Model, SerializerMixin):
     discussions = db.relationship("Discussion", back_populates="lesson")
 
     # Serialization rules
-    serialize_rules = ('-course.enrollments', '-course.students', '-course.certificates','-course.lessons', '-progresses.lesson', '-quizzes.lesson', '-quizzes.student', '-resources.lesson')
+    serialize_rules = ( '-course.students', '-course.certificates','-course.lessons', '-progresses.lesson', '-quizzes.lesson', '-quizzes.student', '-resources.lesson')
 
     def __repr__(self):
         return f"<Lesson {self.title}, Course: {self.course.title}>"

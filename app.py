@@ -1241,12 +1241,26 @@ class AssignmentSubmissions(Resource):
 
             previous_submissions = AssignmentSubmission.query.filter_by(student_id = auth_status.get("public_id"), lesson_id = new_submission_data.get("lesson_id")).all()
 
-            if len(previous_submissions) < 3:
+            if len(previous_submissions) == 0:
                 try:
-                    enrollment = Enrollment.query.join(Course).join(Lesson).filter(Lesson._id == new_submission_data.get("lesson_id")).first()
+                    enrollments = Enrollment.query.filter_by(student_id = auth_status.get("public_id")).all()
+                    for enrollment in enrollments:
+                        for lesson in enrollment.course.lessons:
+                            if lesson._id == new_submission_data.get("lesson_id"):
+                                enrollment = enrollment
+                                break
+                            
                     new_progress = Progress(enrollment_id = enrollment._id, lesson_id = new_submission_data.get("lesson_id"), completed_on = (datetime.now(timezone.utc)).strftime("%d/%m/%Y"))
                     new_submission = AssignmentSubmission(student_id = auth_status.get("public_id"), lesson_id = new_submission_data.get("lesson_id"), submission_text = new_submission_data.get("submission_text") if new_submission_data.get("submission_text") else None, file_url = new_submission_data.get("file_url"), submitted_at= (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
                     db.session.add(new_progress)
+                    db.session.add(new_submission)
+                    db.session.commit()
+                    return make_response({"Success" : "Submission submitted"}, 201)
+                except ValueError as e:
+                    return make_response({"Error" : f"{e}"}, 400)
+            elif 0 < len(previous_submissions) != 3:
+                try:
+                    new_submission = AssignmentSubmission(student_id = auth_status.get("public_id"), lesson_id = new_submission_data.get("lesson_id"), submission_text = new_submission_data.get("submission_text") if new_submission_data.get("submission_text") else None, file_url = new_submission_data.get("file_url"), submitted_at= (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
                     db.session.add(new_submission)
                     db.session.commit()
                     return make_response({"Success" : "Submission submitted"}, 201)
