@@ -277,6 +277,12 @@ class Enrollments(Resource):
 
         if not new_enrollment_data:
             return make_response({"Error": "Please enter enrollment data"}, 400)
+        student_id = auth_status.get("public_id")
+        course_id = new_enrollment_data.get("course_id")
+
+        existing_enrollment = Enrollment.query.filter_by(student_id = student_id, course_id = course_id).first()
+        if existing_enrollment:
+            return make_response({"Error" : "You are already enrolled in this course"}, 400)
         
         try:
             new_enrollment = Enrollment(student_id = auth_status.get("public_id"),
