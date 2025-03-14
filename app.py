@@ -33,7 +33,7 @@ def check_auth():
 
     if request.method == 'OPTIONS':
         response = make_response({},200)
-        response.headers.set('Access-Control-Allow-Origin','https://superb-duckanoo-18547b.netlify.app')
+        response.headers.set('Access-Control-Allow-Origin','http://localhost:3000')
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST , PATCH, DELETE, OPTIONS')
         response.headers.set('Access-Control-Allow-Headers', ' Content-Type')
         response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -55,7 +55,7 @@ def check_auth():
 
 @app.after_request
 def after_request(response):
-    response.headers['Access-Control-Allow-Origin'] = 'https://superb-duckanoo-18547b.netlify.app'
+    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -1261,7 +1261,7 @@ class AssignmentSubmissions(Resource):
                     db.session.add(new_progress)
                     db.session.add(new_submission)
                     db.session.commit()
-                    return make_response({"Success" : "Submission submitted"}, 201)
+                    return make_response({"Success" : "Submission submitted", "Submission" : new_submission.to_dict()}, 201)
                 except ValueError as e:
                     return make_response({"Error" : f"{e}"}, 400)
             elif 0 < len(previous_submissions) != 3:
@@ -1269,7 +1269,7 @@ class AssignmentSubmissions(Resource):
                     new_submission = AssignmentSubmission(student_id = auth_status.get("public_id"), lesson_id = new_submission_data.get("lesson_id"), submission_text = new_submission_data.get("submission_text") if new_submission_data.get("submission_text") else None, file_url = new_submission_data.get("file_url"), submitted_at= (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
                     db.session.add(new_submission)
                     db.session.commit()
-                    return make_response({"Success" : "Submission submitted"}, 201)
+                    return make_response({"Success" : "Submission submitted", "Submission" : new_submission.to_dict()}, 201)
                 except ValueError as e:
                     return make_response({"Error" : f"{e}"}, 400)
             
@@ -1323,7 +1323,7 @@ api.add_resource(AssignmentSubmissionById, "/assignments/<int:id>", endpoint='as
 # Discussions
 class Discussions(Resource):
 
-    # Get all discussions => ADMIN, TEACHER
+    # Get all discussions => ADMIN, TEACHER, STUDENT
     def get(self):
         token = request.headers.get("Authorization")
         auth_status = get_user(token[7:], [])
