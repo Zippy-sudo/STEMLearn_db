@@ -482,17 +482,6 @@ with app.app_context():
     db.session.add_all([Certificate1, Activity6])
     db.session.commit()
 
-    print("Generating Progresses...")
-
-    Progress1 = Progress(enrollment_id=Enrollment1._id, lesson_id=Lesson1._id)
-    Progress2 = Progress(enrollment_id=Enrollment2._id, lesson_id=Lesson3._id)
-    Progress3 = Progress(enrollment_id=Enrollment3._id, lesson_id=Lesson4._id)
-    Progress4 = Progress(enrollment_id=Enrollment4._id, lesson_id=Lesson4._id)
-    Progress5 = Progress(enrollment_id=Enrollment5._id, lesson_id=Lesson3._id)
-
-    db.session.add_all([Progress1, Progress2, Progress3, Progress4, Progress5])
-    db.session.commit()
-
     print("Submitting Assessments...")
 
     Submission1 = AssignmentSubmission(

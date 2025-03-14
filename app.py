@@ -40,17 +40,15 @@ def check_auth():
         return response 
 
     if request.path not in ["/", "/login", "/logout", "/signup", "/unauthCourses"]:
-        if request.headers.get("Authorization")[7:]:
-            token = request.headers.get("Authorization")[7:]
-            auth_status = authorize(token)
-            if auth_status not in [1,2,3,4]:
-                user_id = jwt.decode(jwt = token, key = SECRET_KEY, algorithms="HS256")
-                activity = Activity(user_id = user_id.get("public_id"), action = f"{request.method} {request.endpoint}", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
-                db.session.add(activity)
-                db.session.commit()
+        token = request.headers.get("Authorization")[7:]
+        auth_status = authorize(token)
+        if auth_status not in [1,2,3,4]:
+            user_id = jwt.decode(jwt = token, key = SECRET_KEY, algorithms="HS256")
+            activity = Activity(user_id = user_id.get("public_id"), action = f"{request.method} {request.endpoint}", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+            db.session.add(activity)
+            db.session.commit()
         else:
-            return make_response({"Error" : "Invalid Token"}, 400)
-    
+            return make_response({"Error" : "Invalid Token"}, 401)
     return None
 
 @app.after_request

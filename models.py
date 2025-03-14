@@ -63,7 +63,7 @@ class Enrollment(db.Model, SerializerMixin):
     progresses = db.relationship("Progress", back_populates="enrollment", cascade="all, delete-orphan")
 
     # Serialize Rules
-    serialize_rules = ('-student.enrollments', '-student.courses', '-student.certificates', '-student.activities', '-student.assignment_submissions', '-student.discussions', '-course.enrollments', '-course.students', '-course.certificates', '-certificate.enrollment', '-progresses.enrollment', '-progresses.lessons', '-progresses.course')
+    serialize_rules = ('-student.enrollments', '-student.courses', '-student.certificates', '-student.activities', '-student.assignment_submissions', '-student.discussions', '-course.enrollments', '-course.students', '-course.certificates', '-course.teacher.courses_taught', '-course.lessons.assignment_submissions','-certificate.enrollment', '-progresses.enrollment', '-progresses.lessons', '-progresses.course')
 
     def __repr__(self):
         return f"<Enrollment: {self._id}, Student: {self.student}, Course: {self.course}>"
