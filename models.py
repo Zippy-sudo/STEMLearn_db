@@ -285,7 +285,7 @@ class Discussion(db.Model, SerializerMixin):
     lesson = db.relationship("Lesson", back_populates="discussions")
 
     # Serialization Rules
-    serialize_only = ('_id', 'user_id', 'lesson_id', 'message', 'created_at', 'user.name', 'lesson.title')
+    serialize_only = ('_id', 'user_id', 'lesson_id', 'message', 'created_at', 'user.name', 'user.role', 'lesson.title')
 
     def __repr__(self):
         return f"<Discussion: {self._id}, User: {self.user.name}, Lesson{self.lesson.title}>"
