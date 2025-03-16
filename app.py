@@ -40,17 +40,15 @@ def check_auth():
         return response 
 
     if request.path not in ["/", "/login", "/logout", "/signup", "/unauthCourses"]:
-        if request.headers.get("Authorization")[7:]:
-            token = request.headers.get("Authorization")[7:]
-            auth_status = authorize(token)
-            if auth_status not in [1,2,3,4]:
-                user_id = jwt.decode(jwt = token, key = SECRET_KEY, algorithms="HS256")
-                activity = Activity(user_id = user_id.get("public_id"), action = f"{request.method} {request.endpoint}", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
-                db.session.add(activity)
-                db.session.commit()
+        token = request.headers.get("Authorization")[7:]
+        auth_status = authorize(token)
+        if auth_status not in [1,2,3,4]:
+            user_id = jwt.decode(jwt = token, key = SECRET_KEY, algorithms="HS256")
+            activity = Activity(user_id = user_id.get("public_id"), action = f"{request.method} {request.endpoint}", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
+            db.session.add(activity)
+            db.session.commit()
         else:
-            return make_response({"Error" : "Invalid Token"}, 400)
-    
+            return make_response({"Error" : "Invalid Token"}, 401)
     return None
 
 @app.after_request
@@ -1231,7 +1229,7 @@ class AssignmentSubmissions(Resource):
             submission_dict=[submission.to_dict() for submission in submissions]
             return make_response(submission_dict, 200)
             
-        return make_response({"Error" : "No submissions in database"})
+        return make_response({"Error" : "No submissions in database"},404)
     
     # Post a submission => STUDENT
     def post(self):
@@ -1250,18 +1248,21 @@ class AssignmentSubmissions(Resource):
             if len(previous_submissions) == 0:
                 try:
                     enrollments = Enrollment.query.filter_by(student_id = auth_status.get("public_id")).all()
+                    matched_enrollment = None
                     for enrollment in enrollments:
                         for lesson in enrollment.course.lessons:
                             if lesson._id == new_submission_data.get("lesson_id"):
-                                enrollment = enrollment
+                                matched_enrollment= enrollment
                                 break
+                        if matched_enrollment:
+                            break
                             
-                    new_progress = Progress(enrollment_id = enrollment._id, lesson_id = new_submission_data.get("lesson_id"), completed_on = (datetime.now(timezone.utc)).strftime("%d/%m/%Y"))
+                    new_progress = Progress(enrollment_id = matched_enrollment._id, lesson_id = new_submission_data.get("lesson_id"), completed_on = (datetime.now(timezone.utc)).strftime("%d/%m/%Y"))
                     new_submission = AssignmentSubmission(student_id = auth_status.get("public_id"), lesson_id = new_submission_data.get("lesson_id"), submission_text = new_submission_data.get("submission_text") if new_submission_data.get("submission_text") else None, file_url = new_submission_data.get("file_url"), submitted_at= (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
                     db.session.add(new_progress)
                     db.session.add(new_submission)
                     db.session.commit()
-                    return make_response({"Success" : "Submission submitted"}, 201)
+                    return make_response({"Success" : "Submission submitted", "Submission" : new_submission.to_dict()}, 201)
                 except ValueError as e:
                     return make_response({"Error" : f"{e}"}, 400)
             elif 0 < len(previous_submissions) != 3:
@@ -1269,7 +1270,7 @@ class AssignmentSubmissions(Resource):
                     new_submission = AssignmentSubmission(student_id = auth_status.get("public_id"), lesson_id = new_submission_data.get("lesson_id"), submission_text = new_submission_data.get("submission_text") if new_submission_data.get("submission_text") else None, file_url = new_submission_data.get("file_url"), submitted_at= (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
                     db.session.add(new_submission)
                     db.session.commit()
-                    return make_response({"Success" : "Submission submitted"}, 201)
+                    return make_response({"Success" : "Submission submitted", "Submission" : new_submission.to_dict()}, 201)
                 except ValueError as e:
                     return make_response({"Error" : f"{e}"}, 400)
             
@@ -1323,7 +1324,7 @@ api.add_resource(AssignmentSubmissionById, "/assignments/<int:id>", endpoint='as
 # Discussions
 class Discussions(Resource):
 
-    # Get all discussions => ADMIN, TEACHER
+    # Get all discussions => ADMIN, TEACHER, STUDENT
     def get(self):
         token = request.headers.get("Authorization")
         auth_status = get_user(token[7:], [])

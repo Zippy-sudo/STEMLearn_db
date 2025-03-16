@@ -481,59 +481,6 @@ with app.app_context():
 
     db.session.add_all([Certificate1, Activity6])
     db.session.commit()
-
-    print("Generating Progresses...")
-
-    Progress1 = Progress(enrollment_id=Enrollment1._id, lesson_id=Lesson1._id)
-    Progress2 = Progress(enrollment_id=Enrollment2._id, lesson_id=Lesson3._id)
-    Progress3 = Progress(enrollment_id=Enrollment3._id, lesson_id=Lesson4._id)
-    Progress4 = Progress(enrollment_id=Enrollment4._id, lesson_id=Lesson4._id)
-    Progress5 = Progress(enrollment_id=Enrollment5._id, lesson_id=Lesson3._id)
-
-    db.session.add_all([Progress1, Progress2, Progress3, Progress4, Progress5])
-    db.session.commit()
-
-    print("Submitting Assessments...")
-
-    Submission1 = AssignmentSubmission(
-        student_id = User3.public_id,
-        lesson_id = Lesson1._id,
-        file_url = "http://randomsite",
-        submitted_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p")
-    )
-    Submission2 = AssignmentSubmission(
-        student_id = User3.public_id,
-        lesson_id = Lesson1._id,
-        file_url = "http://randomsite",
-        submitted_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p")
-    )
-    Submission3 = AssignmentSubmission(
-        student_id = User6.public_id,
-        lesson_id = Lesson2._id,
-        file_url = "http://randomsite",
-        submitted_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p")
-    )
-    Submission4 = AssignmentSubmission(
-        student_id = User6.public_id,
-        lesson_id = Lesson4._id,
-        file_url = "http://randomsite",
-        submitted_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p")
-    )
-    Submission5 = AssignmentSubmission(
-        student_id = User5.public_id,
-        lesson_id = Lesson2._id,
-        file_url = "http://randomsite",
-        submitted_at = (datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p")
-    )
-    
-    Activity7 = Activity(user_id=User3.public_id, action="Assignment Submission", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
-    Activity8 = Activity(user_id=User3.public_id, action="Assignment Submission", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
-    Activity9 = Activity(user_id=User6.public_id, action="Assignment Submission", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
-    Activity10 = Activity(user_id=User6.public_id, action="Assignment Submission", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
-    Activity11 = Activity(user_id=User5.public_id, action="Assignment Submission", timestamp=(datetime.now(timezone.utc)).strftime("%d/%m/%Y") + " " + (datetime.now(timezone.utc)).strftime("%I:%M/%p"))
-
-    db.session.add_all([Submission1, Submission2, Submission3, Submission4, Submission5, Activity7,Activity8, Activity9, Activity10, Activity11])
-    db.session.commit()
  
     print("Generating Discussions...")
 

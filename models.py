@@ -63,7 +63,7 @@ class Enrollment(db.Model, SerializerMixin):
     progresses = db.relationship("Progress", back_populates="enrollment", cascade="all, delete-orphan")
 
     # Serialize Rules
-    serialize_rules = ('-student.enrollments', '-student.courses', '-student.certificates', '-student.activities', '-student.assignment_submissions', '-student.discussions', '-course.enrollments', '-course.students', '-course.certificates', '-certificate.enrollment', '-progresses.enrollment', '-progresses.lessons', '-progresses.course')
+    serialize_rules = ('-student.enrollments', '-student.courses', '-student.certificates', '-student.activities', '-student.assignment_submissions', '-student.discussions', '-course.enrollments', '-course.students', '-course.certificates', '-course.teacher.courses_taught', '-course.lessons.assignment_submissions','-certificate.enrollment', '-progresses.enrollment', '-progresses.lessons', '-progresses.course')
 
     def __repr__(self):
         return f"<Enrollment: {self._id}, Student: {self.student}, Course: {self.course}>"
@@ -285,7 +285,7 @@ class Discussion(db.Model, SerializerMixin):
     lesson = db.relationship("Lesson", back_populates="discussions")
 
     # Serialization Rules
-    serialize_only = ('_id', 'user_id', 'lesson_id', 'message', 'created_at', 'user.name', 'lesson.title')
+    serialize_only = ('_id', 'user_id', 'lesson_id', 'message', 'created_at', 'user.name', 'user.role', 'lesson.title')
 
     def __repr__(self):
         return f"<Discussion: {self._id}, User: {self.user.name}, Lesson{self.lesson.title}>"
