@@ -33,7 +33,7 @@ def check_auth():
 
     if request.method == 'OPTIONS':
         response = make_response({},200)
-        response.headers.set('Access-Control-Allow-Origin','https://superb-duckanoo-18547b.netlify.app')
+        response.headers.set('Access-Control-Allow-Origin','http://localhost:3000')
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST , PATCH, DELETE, OPTIONS')
         response.headers.set('Access-Control-Allow-Headers', ' Content-Type')
         response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -53,7 +53,7 @@ def check_auth():
 
 @app.after_request
 def after_request(response):
-    response.headers['Access-Control-Allow-Origin'] = 'https://superb-duckanoo-18547b.netlify.app'
+    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -825,23 +825,29 @@ class QuizById(Resource):
         auth_status = get_user(token[7:], ["STUDENT", "ADMIN"])
 
         if not auth_status:
-            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
-        
-        quiz =  Quiz.query.filter_by(_id = id).first_or_404(description= f"No quiz with Id: {id}")
+            return make_response({"Error": "You are not authorized to access this resource"}, 401)
+
+        quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No quiz with Id: {id}")
         new_quiz_data = request.get_json()
 
         if new_quiz_data:
             try:
                 for key, value in new_quiz_data.items():
-                    if hasattr(quiz, key):
+                    if isinstance(value, dict):
+                        # Handle dictionary values appropriately
+                        # For example, if the value is a nested model instance, you need to fetch and set it
+                        # nested_instance = SomeModel.query.filter_by(**value).first()
+                        # setattr(quiz, key, nested_instance)
+                        pass
+                    else:
                         setattr(quiz, key, value)
-                        db.session.commit()
+                db.session.commit()
                 return make_response(quiz.to_dict(), 200)
-            except ValueError as e:
+            except Exception as e:
                 db.session.rollback()
-                return make_response({"Error": f"{e}"}, 500)
-            
-        return make_response({"Error" : "Please input new quiz data"})
+                return make_response({"Error": str(e)}, 500)
+
+        return make_response({"Error": "Please input new quiz data"}, 400)
     
     def delete(self, id):
         token = request.headers.get("Authorization")
