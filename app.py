@@ -33,7 +33,7 @@ def check_auth():
 
     if request.method == 'OPTIONS':
         response = make_response({},200)
-        response.headers.set('Access-Control-Allow-Origin','http://localhost:3000')
+        response.headers.set('Access-Control-Allow-Origin','https://superb-duckanoo-18547b.netlify.app')
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST , PATCH, DELETE, OPTIONS')
         response.headers.set('Access-Control-Allow-Headers', ' Content-Type')
         response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -53,7 +53,7 @@ def check_auth():
 
 @app.after_request
 def after_request(response):
-    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+    response.headers['Access-Control-Allow-Origin'] = 'https://superb-duckanoo-18547b.netlify.app/'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -815,12 +815,90 @@ class Quizzes(Resource):
 api.add_resource(Quizzes, '/quizzes', endpoint="quizzes")
 
 class QuizById(Resource):
-
     def get(self, id):
-        quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No quiz with Id: {id}")
+        """
+        Fetch a quiz by its ID.
+        """
+        token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["STUDENT", "ADMIN"])
+
+        if not auth_status:
+            return make_response({"Error": "Unauthorized"}, 401)
+
+        quiz = Quiz.query.get_or_404(id)
         return make_response(quiz.to_dict(), 200)
-    
+
     def patch(self, id):
+        """
+        Update a quiz by its ID.
+        """
+        token = request.headers.get("Authorization")
+        auth_status = get_user(token[7:], ["STUDENT", "ADMIN"])
+
+        if not auth_status:
+            return make_response({"Error": "Unauthorized"}, 401)
+
+        quiz = Quiz.query.get_or_404(id)
+        data = request.get_json()
+
+        if not data:
+            return make_response({"Error": "No data provided for update"}, 400)
+
+        try:
+            # Update scalar attributes
+            if 'lesson_id' in data:
+                quiz.lesson_id = data['lesson_id']
+            if 'due_date' in data:
+                quiz.due_date = data['due_date']
+
+            # Handle deleted questions
+            deleted_questions = data.get('deletedQuestions', [])
+            for question_id in deleted_questions:
+                question = Question.query.get(question_id)
+                if question:
+                    db.session.delete(question)
+
+            # Handle question updates
+            updated_questions = data.get('questions', [])
+            existing_questions = {q._id: q for q in quiz.questions}
+
+            for updated_question_data in updated_questions:
+                question_id = updated_question_data.get('_id')
+
+                if question_id and question_id in existing_questions:
+                    # Update existing question
+                    question = existing_questions[question_id]
+                    question.question = updated_question_data.get('question', question.question)
+                    question.option1 = updated_question_data.get('option1', question.option1)
+                    question.option2 = updated_question_data.get('option2', question.option2)
+                    question.option3 = updated_question_data.get('option3', question.option3)
+                    question.option4 = updated_question_data.get('option4', question.option4)
+                    question.correct_answer = updated_question_data.get('correct_answer', question.correct_answer)
+                else:
+                    # Add new question
+                    new_question = Question(
+                        quiz_id=quiz._id,
+                        question=updated_question_data.get('question', ''),
+                        option1=updated_question_data.get('option1', ''),
+                        option2=updated_question_data.get('option2', ''),
+                        option3=updated_question_data.get('option3', ''),
+                        option4=updated_question_data.get('option4', ''),
+                        correct_answer=updated_question_data.get('correct_answer', '')
+                    )
+                    db.session.add(new_question)
+                    quiz.questions.append(new_question)
+
+            db.session.commit()
+            return make_response(quiz.to_dict(), 200)
+
+        except Exception as e:
+            db.session.rollback()
+            return make_response({"Error": str(e)}, 500)
+
+    def delete(self, id):
+        """
+        Delete a quiz by its ID.
+        """
         token = request.headers.get("Authorization")
         auth_status = get_user(token[7:], ["STUDENT", "ADMIN"])
 
@@ -828,41 +906,12 @@ class QuizById(Resource):
             return make_response({"Error": "You are not authorized to access this resource"}, 401)
 
         quiz = Quiz.query.filter_by(_id=id).first_or_404(description=f"No quiz with Id: {id}")
-        new_quiz_data = request.get_json()
-
-        if new_quiz_data:
-            try:
-                for key, value in new_quiz_data.items():
-                    if isinstance(value, dict):
-                        # Handle dictionary values appropriately
-                        # For example, if the value is a nested model instance, you need to fetch and set it
-                        # nested_instance = SomeModel.query.filter_by(**value).first()
-                        # setattr(quiz, key, nested_instance)
-                        pass
-                    else:
-                        setattr(quiz, key, value)
-                db.session.commit()
-                return make_response(quiz.to_dict(), 200)
-            except Exception as e:
-                db.session.rollback()
-                return make_response({"Error": str(e)}, 500)
-
-        return make_response({"Error": "Please input new quiz data"}, 400)
-    
-    def delete(self, id):
-        token = request.headers.get("Authorization")
-        auth_status = get_user(token[7:], ["STUDENT", "ADMIN"])
-
-        if not auth_status:
-            return make_response({"Error" : "You are not authorized to access this resource"}, 401)
-        
-        quiz =  Quiz.query.filter_by(_id = id).first_or_404(description= f"No quiz with Id: {id}")
         db.session.delete(quiz)
         db.session.commit()
-        return make_response({"Success" : "Quiz Deleted"}, 200)
-    
+        return make_response({"Success": "Quiz Deleted"}, 200)
+
+# Add the resource to the API
 api.add_resource(QuizById, '/quizzes/<int:id>', endpoint="quiz_by_id")
-    
 
 # Questions
 class Questions(Resource):
