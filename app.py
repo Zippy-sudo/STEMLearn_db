@@ -53,7 +53,7 @@ def check_auth():
 
 @app.after_request
 def after_request(response):
-    response.headers['Access-Control-Allow-Origin'] = 'https://superb-duckanoo-18547b.netlify.app/'
+    response.headers['Access-Control-Allow-Origin'] = 'https://superb-duckanoo-18547b.netlify.app'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
